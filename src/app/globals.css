@@ -1,0 +1,190 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================================
+   Theme: diconium AI Lab design language.
+   Light is the default; .dark on <html> switches to dark grey.
+   Variable names are stable so every component themes for free.
+   ============================================================ */
+
+:root {
+  /* surfaces */
+  --bg-base: #FAFAFA;
+  --bg-surface: #FFFFFF;
+  --bg-elevated: #FFF6F0;
+  --border: rgba(0, 0, 0, 0.10);
+  --border-subtle: rgba(0, 0, 0, 0.06);
+
+  /* brand */
+  --primary: #FF5A00;
+  --primary-hover: #E54E00;
+  --accent: #FF8C42;
+  --pink: #E84B8A;
+  --teal: #1D9B6C;
+
+  /* text */
+  --text: #1A1A2E;
+  --text-muted: #4A4A6A;
+  --text-subtle: #8A8AAA;
+
+  /* status */
+  --success: #1D9B6C;
+  --warning: #E8920C;
+  --danger: #E5484D;
+
+  /* derived */
+  --primary-tint: rgba(255, 90, 0, 0.10);
+  --primary-tint-strong: rgba(255, 90, 0, 0.16);
+  --icon-grad: linear-gradient(135deg, rgba(255, 90, 0, 0.18), rgba(255, 140, 66, 0.10));
+  --grad-brand: linear-gradient(135deg, #FF5A00, #FF8C42, #E84B8A);
+  --row-alt: rgba(0, 0, 0, 0.025);
+  --card-glow: rgba(255, 90, 0, 0.10);
+
+  /* markdown accents */
+  --md-h3: #7C5CDB;
+  --md-code-text: #C2410C;
+  --md-code-bg: #FFF1E8;
+}
+
+html.dark {
+  --bg-base: #1B1B1F;
+  --bg-surface: #232329;
+  --bg-elevated: #2C2C34;
+  --border: rgba(255, 255, 255, 0.10);
+  --border-subtle: rgba(255, 255, 255, 0.06);
+
+  --primary: #FF6B35;
+  --primary-hover: #FF7A2E;
+  --accent: #FF8C42;
+  --pink: #E84B8A;
+  --teal: #2DB985;
+
+  --text: #F4F4F6;
+  --text-muted: #B4B4C0;
+  --text-subtle: #7C7C8A;
+
+  --success: #2DB985;
+  --warning: #F5A524;
+  --danger: #F2555A;
+
+  --primary-tint: rgba(255, 107, 53, 0.16);
+  --primary-tint-strong: rgba(255, 107, 53, 0.24);
+  --icon-grad: linear-gradient(135deg, rgba(255, 107, 53, 0.24), rgba(255, 140, 66, 0.12));
+  --grad-brand: linear-gradient(135deg, #FF6B35, #FF8C42, #E84B8A);
+  --row-alt: rgba(255, 255, 255, 0.04);
+  --card-glow: rgba(255, 107, 53, 0.14);
+
+  --md-h3: #C4B5FD;
+  --md-code-text: #FDBA74;
+  --md-code-bg: #2C2C34;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html { color-scheme: light; }
+html.dark { color-scheme: dark; }
+
+body {
+  background-color: var(--bg-base);
+  color: var(--text);
+  font-family: 'Inter', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  min-height: 100vh;
+  transition: background-color 250ms ease, color 250ms ease;
+}
+
+/* Brand gradient text — used on page titles, diconium-style */
+.gradient-text {
+  background: var(--grad-brand);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-subtle); }
+
+/* Markdown prose styles */
+.markdown-body { color: var(--text); line-height: 1.7; font-size: 0.925rem; }
+
+.markdown-body h1 {
+  font-size: 1.75rem; font-weight: 700; color: var(--text);
+  margin-top: 1.5rem; margin-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border); padding-bottom: 0.5rem;
+}
+.markdown-body h2 {
+  font-size: 1.35rem; font-weight: 600; color: var(--text);
+  margin-top: 1.5rem; margin-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border-subtle); padding-bottom: 0.35rem;
+}
+.markdown-body h3 {
+  font-size: 1.1rem; font-weight: 600; color: var(--md-h3);
+  margin-top: 1.25rem; margin-bottom: 0.4rem;
+}
+.markdown-body h4, .markdown-body h5, .markdown-body h6 {
+  font-size: 0.95rem; font-weight: 600; color: var(--text-muted);
+  margin-top: 1rem; margin-bottom: 0.35rem;
+}
+.markdown-body p { margin-bottom: 0.85rem; color: var(--text-muted); }
+.markdown-body a { color: var(--primary); text-decoration: underline; text-underline-offset: 2px; }
+.markdown-body a:hover { color: var(--accent); }
+.markdown-body ul, .markdown-body ol { margin-bottom: 0.85rem; padding-left: 1.5rem; }
+.markdown-body li { margin-bottom: 0.25rem; color: var(--text-muted); }
+.markdown-body blockquote {
+  border-left: 3px solid var(--primary); padding-left: 1rem; margin: 1rem 0;
+  color: var(--text-subtle); font-style: italic;
+}
+.markdown-body code {
+  background: var(--md-code-bg); color: var(--md-code-text);
+  padding: 0.15rem 0.4rem; border-radius: 4px;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 0.82rem;
+}
+.markdown-body pre {
+  background: var(--md-code-bg); border: 1px solid var(--border);
+  border-radius: 10px; padding: 1rem 1.25rem; overflow-x: auto; margin-bottom: 1rem;
+}
+.markdown-body pre code { background: transparent; padding: 0; color: var(--text); font-size: 0.85rem; }
+.markdown-body table { border-collapse: collapse; width: 100%; margin-bottom: 1rem; font-size: 0.875rem; }
+.markdown-body th {
+  background: var(--bg-elevated); color: var(--text); font-weight: 600; text-align: left;
+  padding: 0.5rem 0.75rem; border: 1px solid var(--border);
+}
+.markdown-body td { padding: 0.5rem 0.75rem; border: 1px solid var(--border); color: var(--text-muted); }
+.markdown-body tr:nth-child(even) td { background: var(--row-alt); }
+.markdown-body hr { border: none; border-top: 1px solid var(--border); margin: 1.5rem 0; }
+.markdown-body img { max-width: 100%; border-radius: 8px; }
+
+/* Terminal output (kept for any streaming views) */
+.terminal-output {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 0.8rem; line-height: 1.6;
+  color: var(--success); background: var(--bg-elevated); border: 1px solid var(--border);
+  border-radius: 10px; padding: 1rem; overflow-y: auto; white-space: pre-wrap; word-break: break-all;
+}
+.terminal-output .stderr-line { color: var(--danger); }
+
+/* Bento grid */
+.bento-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+@media (max-width: 1200px) { .bento-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 640px) { .bento-grid { grid-template-columns: 1fr; } }
+
+/* Card base — glass-ish, soft shadow per the deck */
+.card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02), 0 8px 24px rgba(0, 0, 0, 0.04);
+  transition: all 200ms ease;
+}
+.card:hover { border-color: var(--border); transform: translateY(-2px); }
+.card-interactive:hover { transform: translateY(-3px); box-shadow: 0 16px 40px var(--card-glow); }
