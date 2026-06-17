@@ -58,13 +58,27 @@ On first launch you land on a setup screen:
    (e.g. `~/Documents/Second-Brain` on Mac, `C:\Users\you\Documents\Second-Brain` on Windows).
    It's validated live.
 
-2. **Local AI models** — the app detects Ollama and shows which models you have. Click **Pull**
-   on any that are missing (downloads with a progress bar — no terminal needed):
-   - **Chat model** — `qwen2.5:3b` (fast, ~1.9 GB) — powers chat, curation, commands
+2. **Local AI models** — the app detects Ollama and lists the models **already on your machine** in a
+   dropdown for each role; pick any of them, or **Pull** a suggested one (downloads with a live progress
+   bar — no terminal needed). You can also type *any* Ollama model name. You're never locked to our picks.
+   - **Chat model** — powers chat, curation, commands
    - **Embedding model** — `nomic-embed-text` (~270 MB) — powers search/retrieval
-   - **Vision model** *(optional)* — `llama3.2-vision` (~7.8 GB) — only needed if you want to drop
-     **images** and have them summarized/OCR'd. Skip it if you don't. (Lighter alternative:
-     `llava:7b`, ~4.7 GB — faster but noticeably less accurate on text-heavy images.)
+   - **Vision model** *(optional)* — only needed if you want to drop **images** and have them OCR'd/summarized.
+
+   **8 GB RAM? Use one model for everything:** `qwen3.5:4b` (~3.4 GB) is **multimodal** — set it as *both*
+   the chat and vision model and it handles chat, curation, commands, **and** image OCR. Pair it with
+   `nomic-embed-text` and that's your whole setup (~3.7 GB).
+
+   | Need | Suggested | Notes |
+   |------|-----------|-------|
+   | One model, 8 GB | `qwen3.5:4b` (chat + vision) | multimodal, strong OCR |
+   | Lightest | `qwen3.5:2b` | multimodal, ~2.7 GB |
+   | Text chat only | `qwen2.5:3b` / `llama3.2:3b` | fast |
+   | Best image accuracy | `llama3.2-vision` (~7.8 GB) | heavier |
+   | Embeddings | `nomic-embed-text` | required |
+
+   If a model isn't installed, the app **auto-falls back to a compatible one you already have**, so it works
+   out of the box with whatever's on your machine.
 
 3. **Build the index** — one click embeds your notes locally so chat can find and cite them.
 
@@ -124,7 +138,8 @@ Once set up, the sidebar gives you:
 |---------|-----|
 | "Ollama isn't running" in the wizard | Run `ollama serve`, then click **Re-check**. |
 | Chat/commands are slow | Expected on first call (model loads into memory). Use a smaller chat model in Settings. |
-| A model won't pull | Pull it manually: `ollama pull qwen2.5:3b`, then refresh. |
+| A model won't pull | Pull it manually: `ollama pull qwen3.5:4b`, then refresh. |
+| Pull fails with `...r2.cloudflarestorage.com: no such host` | DNS can't reach Ollama's model CDN. Switch your DNS to `1.1.1.1` / `8.8.8.8`, disable a VPN/filter, or try another network — then re-pull. |
 | Dropped image just saved to Assets, no note | The **vision model** isn't installed — pull `llama3.2-vision` in Settings. |
 | Image note got details wrong | Small vision models OCR imperfectly — always review the diff. Use `llama3.2-vision` over `llava:7b` for text-heavy images. |
 | Scanned PDF produced an empty note | Image-only PDFs have no text layer; it falls back to a raw save. |

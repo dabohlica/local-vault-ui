@@ -19,6 +19,7 @@ export async function GET(req: NextRequest) {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ model, stream: true }),
+          cache: 'no-store',
         })
         if (!res.ok || !res.body) {
           send({ type: 'error', message: `Pull failed: ${res.status}` })

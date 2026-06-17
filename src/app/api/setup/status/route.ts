@@ -25,7 +25,7 @@ export async function GET() {
   let ollamaReachable = false
   let installed: string[] = []
   try {
-    const res = await fetch(`${OLLAMA_HOST}/api/tags`, { signal: AbortSignal.timeout(2500) })
+    const res = await fetch(`${OLLAMA_HOST}/api/tags`, { signal: AbortSignal.timeout(2500), cache: 'no-store' })
     if (res.ok) {
       ollamaReachable = true
       const data = await res.json() as { models?: Array<{ name: string }> }
