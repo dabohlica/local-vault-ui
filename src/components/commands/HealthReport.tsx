@@ -52,7 +52,7 @@ export function HealthReport() {
       const res = await fetch('/api/commands/health/fix', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ limit: 12 }),
+        body: JSON.stringify({ limit: 25 }),
       })
       const data = await res.json() as ProposalResponse
       if (!res.ok) throw new Error(data.error ?? 'Fix failed')
@@ -168,8 +168,9 @@ export function HealthReport() {
         <p className="text-xs" style={{ color: 'var(--text-subtle)' }}>
           Auto-fix adds missing frontmatter and a &ldquo;For future Claude&rdquo; preamble (summarised
           from each note&rsquo;s own first paragraph) — deterministic and fully local, your content is
-          preserved. 12 notes at a time, each shown as a diff to approve. Broken wikilinks and empty
-          notes need a human and are left as-is.
+          preserved. Up to 25 notes at a time, each shown as a diff to approve (the Apply button stays
+          pinned at the bottom). For broken links, use the <strong>Interlink</strong> command — it
+          creates stub notes so dangling links resolve and grows your graph.
         </p>
       )}
 

@@ -3,14 +3,14 @@
 import {
   Calendar, Zap, CheckSquare, Layout, User, Users,
   Folder, FileText, Search, Globe, RefreshCw, Activity,
-  Save, Layers, Play, ShieldCheck
+  Save, Layers, Play, ShieldCheck, Network
 } from 'lucide-react'
 import { cn } from '@/lib/cn'
 import type { LocalCommand } from '@/lib/commands'
 
 const ICON_MAP: Record<string, React.ElementType> = {
   Calendar, Zap, CheckSquare, Layout, User, Users,
-  Folder, FileText, Search, Globe, RefreshCw, Activity, Save, Layers,
+  Folder, FileText, Search, Globe, RefreshCw, Activity, Save, Layers, Network,
 }
 
 type Props = {

@@ -149,25 +149,35 @@ export function ProposalReview({ result, onApplied, onDiscard }: Props) {
         )
       })}
 
-      <div className="flex justify-end gap-2">
-        {onDiscard && (
+      {/* Sticky action bar — always reachable no matter how many diffs are listed,
+          so the user never has to hunt for the Apply button by scrolling. */}
+      <div
+        className="sticky bottom-0 z-10 flex items-center justify-between gap-2 -mx-1 px-3 py-3 rounded-xl"
+        style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', boxShadow: '0 -8px 24px rgba(0,0,0,0.18)' }}
+      >
+        <span className="text-xs" style={{ color: 'var(--text-subtle)' }}>
+          {approved.size} of {changes.length} selected
+        </span>
+        <div className="flex items-center gap-2">
+          {onDiscard && (
+            <button
+              onClick={onDiscard}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-150"
+              style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}
+            >
+              <X size={14} /> Discard
+            </button>
+          )}
           <button
-            onClick={onDiscard}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-150"
-            style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}
+            onClick={() => void apply()}
+            disabled={applying || approved.size === 0}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+            style={{ background: 'linear-gradient(135deg, var(--primary), var(--accent))', color: 'white' }}
           >
-            <X size={14} /> Discard
+            {applying ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+            Apply {approved.size} change{approved.size === 1 ? '' : 's'}
           </button>
-        )}
-        <button
-          onClick={() => void apply()}
-          disabled={applying || approved.size === 0}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
-          style={{ background: 'linear-gradient(135deg, var(--primary), var(--accent))', color: 'white' }}
-        >
-          {applying ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-          Apply {approved.size} change{approved.size === 1 ? '' : 's'}
-        </button>
+        </div>
       </div>
     </div>
   )

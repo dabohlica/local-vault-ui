@@ -4,7 +4,7 @@
 // reviews as diffs before anything is written. No command in this app touches a
 // cloud API — vault data never leaves the device.
 
-export type CommandMode = 'local-model' | 'local-deterministic'
+export type CommandMode = 'local-model' | 'local-deterministic' | 'local-proposal'
 
 export type LocalCommand = {
   id: string
@@ -175,6 +175,17 @@ confidence levels. Base it ONLY on the retrieved context — do not fabricate.`,
     desc: 'Scan vault structure for issues',
     icon: 'Activity',
     mode: 'local-deterministic',
+    inputLabel: '',
+    inputPlaceholder: '',
+    retrieveK: 0,
+    instructions: '',
+  },
+  {
+    id: 'interlink',
+    title: 'Interlink',
+    desc: 'Grow the graph — add wikilinks & resolve broken links',
+    icon: 'Network',
+    mode: 'local-proposal',
     inputLabel: '',
     inputPlaceholder: '',
     retrieveK: 0,

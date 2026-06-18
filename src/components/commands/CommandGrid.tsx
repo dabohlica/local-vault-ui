@@ -6,6 +6,7 @@ import { CommandCard } from './CommandCard'
 import { LOCAL_COMMANDS, type LocalCommand } from '@/lib/commands'
 import { ProposalFlow } from '@/components/shared/ProposalFlow'
 import { HealthReport } from './HealthReport'
+import { ProposalRunner } from './ProposalRunner'
 
 export function CommandGrid() {
   const [active, setActive] = useState<LocalCommand | null>(null)
@@ -61,6 +62,13 @@ export function CommandGrid() {
             <div className="p-5">
               {active.mode === 'local-deterministic' ? (
                 <HealthReport key={active.id} />
+              ) : active.mode === 'local-proposal' ? (
+                <ProposalRunner
+                  key={active.id}
+                  endpoint={`/api/commands/${active.id}`}
+                  runLabel="Scan & propose links"
+                  blurb="Scans your notes locally and proposes new [[wikilinks]] for unlinked mentions of existing notes, plus stub notes to resolve broken links — growing your Obsidian graph. Every change is shown as a diff to approve."
+                />
               ) : (
                 <ProposalFlow
                   key={active.id}

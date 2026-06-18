@@ -20,6 +20,18 @@ export type HealthReport = {
 const FRONTMATTER_RE = /^---\r?\n[\s\S]*?\r?\n---/
 const PREAMBLE_RE = /for future claude/i
 
+// Strip fenced code blocks and inline code so example/illustrative [[links]] inside
+// them aren't mistaken for real, broken wikilinks.
+function stripCode(s: string): string {
+  return s.replace(/```[\s\S]*?```/g, '').replace(/`[^`]*`/g, '')
+}
+
+// Notes that are documentation/scaffolding, not content — their example links and
+// structure shouldn't be health-flagged.
+function isMetaNote(notePath: string): boolean {
+  return path.basename(notePath).toLowerCase() === '_claude.md'
+}
+
 export function scanVaultHealth(): HealthReport {
   const notes = listAllNotes()
 
@@ -34,6 +46,8 @@ export function scanVaultHealth(): HealthReport {
   const issues: HealthIssue[] = []
 
   for (const note of notes) {
+    if (isMetaNote(note.path)) continue // skip _CLAUDE.md (conventions/scaffold doc)
+
     let content: string
     try {
       content = fs.readFileSync(resolveVaultPath(note.path), 'utf-8')
@@ -55,8 +69,9 @@ export function scanVaultHealth(): HealthReport {
       issues.push({ path: note.path, kind: 'missing-preamble', detail: 'No "For future Claude" preamble' })
     }
 
-    // Broken wikilinks: [[Target]] or [[Target|alias]] / [[Target#heading]]
-    const links = Array.from(content.matchAll(/\[\[([^\]|#]+)(?:[#|][^\]]*)?\]\]/g))
+    // Broken wikilinks: [[Target]] or [[Target|alias]] / [[Target#heading]].
+    // Scan code-stripped content so example links in fences aren't false positives.
+    const links = Array.from(stripCode(content).matchAll(/\[\[([^\]|#]+)(?:[#|][^\]]*)?\]\]/g))
     const seen = new Set<string>()
     for (const m of links) {
       const target = m[1].trim()
