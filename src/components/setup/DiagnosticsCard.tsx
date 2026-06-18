@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { Stethoscope, RefreshCw, Loader2, CheckCircle2, AlertTriangle, Database } from 'lucide-react'
+import { Stethoscope, RefreshCw, Loader2, CheckCircle2, AlertTriangle } from 'lucide-react'
 
 type Diag = {
   vault: { path: string; exists: boolean; notesOnDisk: number }
@@ -22,7 +22,6 @@ type Diag = {
 export function DiagnosticsCard() {
   const [diag, setDiag] = useState<Diag | null>(null)
   const [loading, setLoading] = useState(false)
-  const [syncing, setSyncing] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -33,14 +32,6 @@ export function DiagnosticsCard() {
   }, [])
 
   useEffect(() => { void load() }, [load])
-
-  async function rebuild() {
-    setSyncing(true)
-    try {
-      await fetch('/api/index/rebuild', { method: 'POST' })
-      await load()
-    } catch { /* ignore */ } finally { setSyncing(false) }
-  }
 
   const d = diag
   return (
@@ -99,15 +90,11 @@ export function DiagnosticsCard() {
             </details>
           )}
 
-          <button
-            onClick={() => void rebuild()}
-            disabled={syncing}
-            className="self-start flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all hover:scale-[1.02] disabled:opacity-50"
-            style={{ background: 'linear-gradient(135deg, var(--primary), var(--accent))', color: 'white' }}
-          >
-            {syncing ? <Loader2 size={12} className="animate-spin" /> : <Database size={12} />}
-            {syncing ? 'Rebuilding…' : 'Rebuild index now'}
-          </button>
+          {d.unindexedCount > 0 && (
+            <p className="text-xs" style={{ color: 'var(--text-subtle)' }}>
+              Use <strong>Build / Rebuild index</strong> in Step 3 above to re-embed.
+            </p>
+          )}
         </div>
       )}
     </div>
