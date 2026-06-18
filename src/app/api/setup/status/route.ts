@@ -4,6 +4,7 @@ import { getConfig } from '@/lib/config'
 import { OLLAMA_HOST } from '@/lib/ollama'
 import { indexStats } from '@/lib/embeddings'
 import { countMarkdownFiles } from '@/lib/vault'
+import { vaultInitState } from '@/lib/vaultInit'
 
 // One call that tells the onboarding wizard exactly what's ready and what isn't.
 export async function GET() {
@@ -40,9 +41,21 @@ export async function GET() {
   let chunks = 0
   try { chunks = indexStats().chunks } catch { /* no index yet */ }
 
+  // First-run scaffolding state (only meaningful once a valid vault is set).
+  let init = { empty: false, hasClaudeMd: false, noteCount }
+  if (vaultValid) {
+    try { init = vaultInitState() } catch { /* leave defaults */ }
+  }
+
   return NextResponse.json({
     configured: vaultValid,
     vault: { path: cfg.vaultPath, valid: vaultValid, noteCount },
+    init,
+    schedule: {
+      caretakeEnabled: cfg.caretakeEnabled,
+      caretakeHour: cfg.caretakeHour,
+      syncIntervalHours: cfg.syncIntervalHours,
+    },
     ollama: {
       host: OLLAMA_HOST,
       reachable: ollamaReachable,

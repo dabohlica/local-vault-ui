@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   FolderOpen, Cpu, Database, CheckCircle2, XCircle, Loader2, Download,
-  ArrowRight, BookOpen, RefreshCw,
+  ArrowRight, BookOpen, RefreshCw, Sparkles, Clock,
 } from 'lucide-react'
 
 type Status = {
@@ -16,6 +16,8 @@ type Status = {
     hasChatModel: boolean; hasEmbedModel: boolean; hasVisionModel: boolean
   }
   index: { chunks: number; built: boolean }
+  init: { empty: boolean; hasClaudeMd: boolean; noteCount: number }
+  schedule: { caretakeEnabled: boolean; caretakeHour: number; syncIntervalHours: number }
 }
 
 type Role = 'chatModel' | 'embedModel' | 'visionModel'
@@ -67,6 +69,8 @@ export default function SetupPage() {
   const [pullPct, setPullPct] = useState<number | null>(null)
   const [building, setBuilding] = useState(false)
   const [buildError, setBuildError] = useState<string | null>(null)
+  const [initializing, setInitializing] = useState(false)
+  const [initMsg, setInitMsg] = useState<string | null>(null)
 
   const refresh = useCallback(async () => {
     const res = await fetch('/api/setup/status')
@@ -154,6 +158,36 @@ export default function SetupPage() {
     }
   }
 
+  async function initVault() {
+    setInitializing(true)
+    setInitMsg(null)
+    try {
+      const res = await fetch('/api/vault/init', { method: 'POST' })
+      const data = await res.json() as { created?: string[]; error?: string }
+      if (!res.ok) throw new Error(data.error ?? 'Init failed')
+      setInitMsg(
+        data.created && data.created.length
+          ? `Created ${data.created.join(', ')}`
+          : 'Already initialized'
+      )
+      await refresh()
+    } catch (err) {
+      setInitMsg(err instanceof Error ? err.message : 'Init failed')
+    } finally {
+      setInitializing(false)
+    }
+  }
+
+  // Persist a schedule change immediately.
+  async function saveSchedule(patch: Partial<Status['schedule']>) {
+    await fetch('/api/setup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch),
+    })
+    await refresh()
+  }
+
   // Pick any model for a role (chat/embed/vision); persists immediately.
   async function saveModel(role: Role, model: string) {
     await fetch('/api/setup', {
@@ -211,6 +245,28 @@ export default function SetupPage() {
           <p className="text-xs mt-2 flex items-center gap-1.5" style={{ color: 'var(--success)' }}>
             <CheckCircle2 size={12} /> Connected — {s?.vault.noteCount} notes found
           </p>
+        )}
+
+        {/* First-run scaffolding: only when the connected vault is empty. */}
+        {vaultReady && s?.init.empty && (
+          <div className="mt-3 rounded-lg p-3" style={{ background: 'var(--primary-tint)', border: '1px solid var(--border)' }}>
+            <p className="text-xs flex items-start gap-1.5" style={{ color: 'var(--text-muted)' }}>
+              <Sparkles size={13} className="mt-0.5 flex-shrink-0" style={{ color: 'var(--primary)' }} />
+              This vault is empty. Initialize it with the AI-first skeleton
+              (<span className="font-mono">_CLAUDE.md</span> + Projects/Daily/Logs/People/Knowledge/Assets)
+              so curation has conventions to follow. Nothing existing is ever overwritten.
+            </p>
+            <button
+              onClick={() => void initVault()}
+              disabled={initializing}
+              className="mt-2 flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all hover:scale-[1.02] disabled:opacity-50"
+              style={{ background: 'linear-gradient(135deg, var(--primary), var(--accent))', color: 'white' }}
+            >
+              {initializing ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+              Initialize vault
+            </button>
+            {initMsg && <p className="text-xs mt-2" style={{ color: 'var(--text-subtle)' }}>{initMsg}</p>}
+          </div>
         )}
       </StepCard>
 
@@ -276,6 +332,53 @@ export default function SetupPage() {
             <CheckCircle2 size={12} /> {s?.index.chunks} chunks indexed
           </p>
         ) : null}
+      </StepCard>
+
+      {/* Step 4 — Automatic caretaking (optional; doesn't gate entry) */}
+      <StepCard n={4} title="Automatic caretaking" icon={Clock} done={!!s?.schedule.caretakeEnabled}>
+        <p className="text-xs mb-3" style={{ color: 'var(--text-muted)' }}>
+          While the app is open, keep the index fresh and run a nightly health check —
+          all local. <span style={{ color: 'var(--text-subtle)' }}>For always-on runs even when the app is
+          closed, point an OS cron at <span className="font-mono">POST /api/caretake</span> (see README).</span>
+        </p>
+
+        {s && (
+          <div className="flex flex-col gap-3">
+            <label className="flex items-center gap-2 text-xs cursor-pointer" style={{ color: 'var(--text)' }}>
+              <input
+                type="checkbox"
+                checked={s.schedule.caretakeEnabled}
+                onChange={e => void saveSchedule({ caretakeEnabled: e.target.checked })}
+              />
+              Enable automatic caretaking
+            </label>
+
+            <div className={`flex flex-wrap gap-4 ${s.schedule.caretakeEnabled ? '' : 'opacity-40 pointer-events-none'}`}>
+              <label className="flex items-center gap-2 text-xs" style={{ color: 'var(--text-muted)' }}>
+                Sync index every
+                <input
+                  type="number" min={1} max={168}
+                  value={s.schedule.syncIntervalHours}
+                  onChange={e => void saveSchedule({ syncIntervalHours: Number(e.target.value) })}
+                  className="w-16 rounded-lg px-2 py-1 text-sm outline-none font-mono"
+                  style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text)' }}
+                />
+                hours
+              </label>
+              <label className="flex items-center gap-2 text-xs" style={{ color: 'var(--text-muted)' }}>
+                Nightly full caretake at
+                <input
+                  type="number" min={0} max={23}
+                  value={s.schedule.caretakeHour}
+                  onChange={e => void saveSchedule({ caretakeHour: Number(e.target.value) })}
+                  className="w-16 rounded-lg px-2 py-1 text-sm outline-none font-mono"
+                  style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text)' }}
+                />
+                :00
+              </label>
+            </div>
+          </div>
+        )}
       </StepCard>
 
       <button

@@ -91,6 +91,34 @@ follow the "AI-first" rules: rich frontmatter, a "For future Claude" preamble, m
 `[[wikilinks]]`, recency markers, and confidence levels. Nothing is written until you approve
 the diff.
 
+## Vault initialization & caretaking
+
+**Initialize an empty vault.** Point the wizard at a brand-new/empty folder and Step 1 offers
+**Initialize vault** — it scaffolds the AI-first skeleton (`_CLAUDE.md` + `Projects/`, `Daily/`,
+`Logs/`, `People/`, `Knowledge/`, `Assets/`) so curation has conventions to follow. It's
+idempotent and never overwrites an existing file (`src/lib/vaultInit.ts`).
+
+**Automatic caretaking** (Settings → Step 4). While the app is open, an in-app scheduler
+(`src/components/layout/AutoCaretake.tsx`) keeps the index fresh and runs a nightly health check —
+all local:
+
+- **Index sync** every *N* hours (default 6) — incremental re-embed of changed notes.
+- **Nightly full caretake** at a chosen hour (default 03:00) — sync + a deterministic health scan
+  (missing frontmatter/preamble, broken wikilinks, empty notes), with a summary appended to
+  `Logs/YYYY-MM-DD.md`. If the app was closed past the hour, it catches up at next launch.
+
+It's a foreground scheduler, not a headless daemon — it only runs while the app is open. For
+**always-on** scheduling, point an OS cron/Task Scheduler at the same endpoint:
+
+```bash
+# macOS/Linux cron — nightly full caretake at 03:00 (app or no app)
+0 3 * * * curl -s -X POST http://localhost:3000/api/caretake -H 'Content-Type: application/json' -d '{"mode":"full"}'
+```
+
+`POST /api/caretake` accepts `{"mode":"sync"}` (index only) or `{"mode":"full"}` (sync + health +
+log). `GET /api/caretake` returns the current schedule. Disable the in-app scheduler any time from
+Settings.
+
 ## Notes
 
 - Local-only tool — no auth; bind to localhost only.

@@ -12,6 +12,10 @@ export type AppConfig = {
   chatModel: string
   embedModel: string
   visionModel: string
+  // Automatic caretaking. All local, all opt-out-able from Settings.
+  caretakeEnabled: boolean   // master switch for the in-app scheduler
+  caretakeHour: number       // 0–23, local time, for the nightly full caretake
+  syncIntervalHours: number  // how often to keep the embedding index fresh
 }
 
 function defaults(): AppConfig {
@@ -20,6 +24,9 @@ function defaults(): AppConfig {
     chatModel: process.env.OLLAMA_CHAT_MODEL ?? 'qwen2.5:3b',
     embedModel: process.env.OLLAMA_EMBED_MODEL ?? 'nomic-embed-text',
     visionModel: process.env.OLLAMA_VISION_MODEL ?? 'llama3.2-vision',
+    caretakeEnabled: true,
+    caretakeHour: 3,
+    syncIntervalHours: 6,
   }
 }
 

@@ -28,6 +28,16 @@ export async function POST(req: NextRequest) {
 
     if (body.chatModel !== undefined) patch.chatModel = body.chatModel.trim()
     if (body.embedModel !== undefined) patch.embedModel = body.embedModel.trim()
+    if (body.visionModel !== undefined) patch.visionModel = body.visionModel.trim()
+
+    // Automatic-caretaking schedule.
+    if (body.caretakeEnabled !== undefined) patch.caretakeEnabled = !!body.caretakeEnabled
+    if (body.caretakeHour !== undefined) {
+      patch.caretakeHour = Math.min(23, Math.max(0, Math.floor(body.caretakeHour)))
+    }
+    if (body.syncIntervalHours !== undefined) {
+      patch.syncIntervalHours = Math.min(168, Math.max(1, Math.floor(body.syncIntervalHours)))
+    }
 
     const vaultChanged = patch.vaultPath !== undefined && patch.vaultPath !== getConfig().vaultPath
     const next = setConfig(patch)
