@@ -3,7 +3,7 @@ import { retrieveNotes, indexStats, syncIndex } from '@/lib/embeddings'
 import { buildRagPrompt } from '@/lib/prompts'
 import { ollamaChat } from '@/lib/ollama'
 import { getConfig } from '@/lib/config'
-import { appendMessages } from '@/lib/chatHistory'
+import { appendMessages, getHistory } from '@/lib/chatHistory'
 
 export async function POST(req: NextRequest) {
   try {
@@ -36,9 +36,19 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    // Note-level retrieval with full-note context (not just the matching fragment).
-    const chunks = await retrieveNotes(body.question, { topNotes: 6, perNoteChars: 6000 })
-    const messages = buildRagPrompt(body.question, chunks)
+    // Prior turns (persisted, last 7 days) give the conversation memory + let us
+    // resolve follow-ups ("what about his role?") during retrieval.
+    const history = getHistory()
+    const priorUserTurns = history.filter(m => m.role === 'user').slice(-2).map(m => m.content)
+
+    // Expand the retrieval query with recent user turns so pronouns/topics in a
+    // follow-up still fetch the right notes (the embedding of "his role?" alone
+    // retrieves nothing useful).
+    const retrievalQuery = [...priorUserTurns, body.question].join('\n')
+
+    // Hybrid note-level retrieval with full-note context (not just the matching fragment).
+    const chunks = await retrieveNotes(retrievalQuery, { topNotes: 7, perNoteChars: 6000 })
+    const messages = buildRagPrompt(body.question, chunks, history)
     const answer = await ollamaChat({ messages })
 
     const citations = Array.from(

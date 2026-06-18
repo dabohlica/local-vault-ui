@@ -256,35 +256,76 @@ export async function retrieve(query: string, k = 6): Promise<RetrievedChunk[]> 
   return scored.slice(0, k)
 }
 
-// Note-level retrieval with context expansion: rank notes by their best-matching
-// chunk, then return the FULL note content for the top notes (deduping identical
-// copies, e.g. duplicate imports). This fixes "found the right note but it has no
-// description" — a single chunk is a fragment; the answer often lives elsewhere
-// in the same note.
+const STOPWORDS = new Set([
+  'the', 'a', 'an', 'and', 'or', 'of', 'to', 'in', 'on', 'for', 'is', 'are', 'was', 'were', 'be',
+  'what', 'who', 'whom', 'whose', 'which', 'when', 'where', 'why', 'how', 'do', 'does', 'did', 'tell',
+  'me', 'about', 'i', 'you', 'it', 'its', 'this', 'that', 'these', 'those', 'his', 'her', 'their',
+  'they', 'he', 'she', 'we', 'my', 'your', 'with', 'know', 'can', 'please', 'give', 'show', 'have',
+])
+
+// Meaningful query terms for lexical matching (drops stopwords/short tokens).
+function queryTerms(text: string): string[] {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const raw of text.toLowerCase().split(/[^a-z0-9äöüß]+/)) {
+    if (raw.length < 3 || STOPWORDS.has(raw) || seen.has(raw)) continue
+    seen.add(raw); out.push(raw)
+  }
+  return out
+}
+
+function titleOf(notePath: string): string {
+  return path.basename(notePath).replace(/\.md$/, '')
+}
+
+// Hybrid note-level retrieval: combine semantic similarity with a lexical/keyword
+// signal and a strong title-match boost, then return FULL note content for the top
+// notes. The lexical + title signals are what make "tell me about <Person>" surface
+// the note literally named/containing that person — pure embedding similarity ranks
+// short named-entity queries poorly and was the cause of false "I don't know"s.
 export async function retrieveNotes(
   query: string,
   opts: { topNotes?: number; perNoteChars?: number } = {}
 ): Promise<RetrievedChunk[]> {
-  const topNotes = opts.topNotes ?? 6
+  const topNotes = opts.topNotes ?? 7
   const perNoteChars = opts.perNoteChars ?? 6000
 
   const database = getDb()
   const queryEmbedding = await ollamaEmbed(query)
   const rows = database.prepare('SELECT * FROM chunks').all() as ChunkRow[]
+  const terms = queryTerms(query)
 
-  // Best chunk score per note.
-  const best = new Map<string, number>()
+  // Per note: best semantic score + accumulated lexical hits across its chunks.
+  const sem = new Map<string, number>()
+  const lex = new Map<string, number>()
   for (const row of rows) {
     const score = cosineSimilarity(queryEmbedding, JSON.parse(row.embedding) as number[])
-    const prev = best.get(row.note_path)
-    if (prev === undefined || score > prev) best.set(row.note_path, score)
+    if ((sem.get(row.note_path) ?? -1) < score) sem.set(row.note_path, score)
+    if (terms.length) {
+      const hay = row.content.toLowerCase()
+      let hits = 0
+      for (const t of terms) if (hay.includes(t)) hits++
+      if (hits) lex.set(row.note_path, (lex.get(row.note_path) ?? 0) + hits)
+    }
   }
 
-  const ranked = Array.from(best.entries()).sort((a, b) => b[1] - a[1])
+  // Combine into a single score per note.
+  const notePaths = new Set<string>([...Array.from(sem.keys()), ...Array.from(lex.keys())])
+  const combined: Array<{ notePath: string; score: number }> = []
+  for (const notePath of Array.from(notePaths)) {
+    const s = sem.get(notePath) ?? 0
+    const lexNorm = Math.min(1, (lex.get(notePath) ?? 0) / Math.max(1, terms.length)) // fraction of terms present
+    // Title containing a query term is the strongest signal (e.g. People/<Name>.md).
+    const title = titleOf(notePath).toLowerCase()
+    const titleHit = terms.some(t => title.includes(t))
+    const score = s + 0.5 * lexNorm + (titleHit ? 0.6 : 0)
+    combined.push({ notePath, score })
+  }
+  combined.sort((a, b) => b.score - a.score)
 
   const out: RetrievedChunk[] = []
   const seen = new Set<string>() // dedup identical-content notes (duplicate imports)
-  for (const [notePath, score] of ranked) {
+  for (const { notePath, score } of combined) {
     if (out.length >= topNotes) break
     let raw: string
     try {

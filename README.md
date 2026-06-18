@@ -108,6 +108,17 @@ behind a reviewable diff:
   preserved verbatim. Fully local, no model variance. Broken wikilinks and empty
   notes are left for a human (`src/lib/healthFix.ts`).
 
+## Chat: multi-turn + hybrid retrieval
+
+Chat is **multi-turn** — the last few exchanges are sent with each question, so follow-ups resolve
+("what about *his* role?", "*that* project") instead of starting cold. The retrieval query is also
+expanded with recent user turns so follow-ups still fetch the right notes.
+
+Retrieval is **hybrid** (`src/lib/embeddings.ts` → `retrieveNotes`): semantic similarity **plus** a
+lexical/keyword signal and a strong **title-match boost**. This fixes false "I don't know"s on named
+entities — asking "who is *<Person>*?" now surfaces `People/<Person>.md` even when pure embedding
+similarity ranked it poorly (short name queries embed badly).
+
 ## Chat history & capturing conversations
 
 Chat keeps a **lightweight, local history** — the recent thread is restored on load and **auto-clears

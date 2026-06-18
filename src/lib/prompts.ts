@@ -22,19 +22,27 @@ function formatChunks(chunks: RetrievedChunk[]): string {
     .join('\n\n---\n\n')
 }
 
-export function buildRagPrompt(question: string, chunks: RetrievedChunk[]) {
-  const system = `You are a local assistant answering questions about Daniel's personal Obsidian vault.
-Answer ONLY using the information in the provided source excerpts below. If the sources don't contain
-the answer, say you don't know — do not make things up.
+export type PriorMessage = { role: 'user' | 'assistant'; content: string }
 
-When you reference information from a source, cite it inline using its wikilink, e.g. [[Projects/FreeRange]].
+export function buildRagPrompt(question: string, chunks: RetrievedChunk[], history: PriorMessage[] = []) {
+  const system = `You are a local assistant answering questions about Daniel's personal Obsidian vault.
+This is a multi-turn conversation — use the earlier messages for context (e.g. resolve "he", "that
+project", "the one you mentioned" against what was already discussed).
+
+Answer using the information in the provided source excerpts below and the conversation so far. If the
+sources don't contain the answer, say so plainly — do not make things up. When you reference information
+from a source, cite it inline using its wikilink, e.g. [[Projects/FreeRange]].
 
 --- VAULT SOURCES ---
 
 ${formatChunks(chunks)}`
 
+  // Keep the last few turns for context without blowing the small model's window.
+  const recent = history.slice(-6)
+
   return [
     { role: 'system' as const, content: system },
+    ...recent.map(m => ({ role: m.role, content: m.content })),
     { role: 'user' as const, content: question },
   ]
 }
