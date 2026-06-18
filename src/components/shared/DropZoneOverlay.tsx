@@ -21,8 +21,10 @@ export function DropZoneOverlay() {
   // Ingest queue: text/PDF files are turned into structured notes one at a time.
   const [queue, setQueue] = useState<File[]>([])
   const [current, setCurrent] = useState<File | null>(null)
-  const [phase, setPhase] = useState<'idle' | 'ingesting' | 'review'>('idle')
+  const [phase, setPhase] = useState<'idle' | 'compose' | 'ingesting' | 'review'>('idle')
   const [result, setResult] = useState<ProposalResponse | null>(null)
+  // Optional notes the user attaches to the current file; sent with high priority.
+  const [notes, setNotes] = useState('')
 
   const rawSave = useCallback(async (file: File) => {
     try {
@@ -52,45 +54,50 @@ export function DropZoneOverlay() {
     if (toIngest.length) setQueue(prev => [...prev, ...toIngest])
   }, [showToast])
 
-  // Process the ingest queue one file at a time.
+  // Dequeue one file at a time and pause on a "compose" step so the user can
+  // optionally attach notes before the model drafts the note.
   useEffect(() => {
     if (current || phase !== 'idle' || queue.length === 0) return
     const [next, ...rest] = queue
     setQueue(rest)
     setCurrent(next)
-    setPhase('ingesting')
+    setNotes('')
+    setPhase('compose')
+  }, [queue, current, phase])
 
-    void (async () => {
-      try {
-        const fd = new FormData()
-        fd.append('file', next)
-        const res = await fetch('/api/vault/ingest', { method: 'POST', body: fd })
-        if (res.status === 415) {
-          // Can't extract text — fall back to saving the raw file.
-          await rawSave(next)
-          showToast(`${next.name}: saved as-is (couldn't read text)`, 'info')
-          setCurrent(null); setPhase('idle')
-          return
-        }
-        const data = await res.json() as ProposalResponse & { savedOnly?: boolean; summary?: string }
-        if (!res.ok) throw new Error(data.error ?? 'Ingest failed')
-        if (data.savedOnly) {
-          // Image saved, but no vision model to summarize it.
-          showToast(data.summary ?? `Saved ${next.name}`, 'info')
-          setCurrent(null); setPhase('idle')
-          return
-        }
-        setResult(data)
-        setPhase('review')
-      } catch (err) {
-        showToast(err instanceof Error ? err.message : `Failed to ingest ${next.name}`, 'error')
+  // Send the current file (plus any attached notes) to the local ingest pipeline.
+  const processCurrent = useCallback(async (file: File, attachedNotes: string) => {
+    setPhase('ingesting')
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      if (attachedNotes.trim()) fd.append('notes', attachedNotes.trim())
+      const res = await fetch('/api/vault/ingest', { method: 'POST', body: fd })
+      if (res.status === 415) {
+        // Can't extract text — fall back to saving the raw file.
+        await rawSave(file)
+        showToast(`${file.name}: saved as-is (couldn't read text)`, 'info')
         setCurrent(null); setPhase('idle')
+        return
       }
-    })()
-  }, [queue, current, phase, rawSave, showToast])
+      const data = await res.json() as ProposalResponse & { savedOnly?: boolean; summary?: string }
+      if (!res.ok) throw new Error(data.error ?? 'Ingest failed')
+      if (data.savedOnly) {
+        // Image saved, but no vision model to summarize it.
+        showToast(data.summary ?? `Saved ${file.name}`, 'info')
+        setCurrent(null); setPhase('idle')
+        return
+      }
+      setResult(data)
+      setPhase('review')
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : `Failed to ingest ${file.name}`, 'error')
+      setCurrent(null); setPhase('idle')
+    }
+  }, [rawSave, showToast])
 
   function finish() {
-    setResult(null); setCurrent(null); setPhase('idle')
+    setResult(null); setCurrent(null); setNotes(''); setPhase('idle')
   }
 
   // Drag listeners
@@ -131,8 +138,8 @@ export function DropZoneOverlay() {
         </div>
       )}
 
-      {/* Ingesting / review modal */}
-      {(phase === 'ingesting' || phase === 'review') && (
+      {/* Compose / ingesting / review modal */}
+      {(phase === 'compose' || phase === 'ingesting' || phase === 'review') && (
         <div className="fixed inset-0 z-[9999] flex items-start justify-center overflow-y-auto p-6" style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)' }}>
           <div className="w-full max-w-2xl my-6 rounded-2xl p-5" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
             <div className="flex items-center justify-between mb-4">
@@ -149,6 +156,44 @@ export function DropZoneOverlay() {
                 <X size={15} />
               </button>
             </div>
+
+            {phase === 'compose' && current && (
+              <div className="flex flex-col gap-3">
+                <label className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>
+                  Additional notes <span style={{ color: 'var(--text-subtle)' }}>(optional — sent with the file, high priority for the summary)</span>
+                </label>
+                <textarea
+                  autoFocus
+                  value={notes}
+                  onChange={e => setNotes(e.target.value)}
+                  onKeyDown={e => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') void processCurrent(current, notes) }}
+                  placeholder="e.g. This is the signed audit contract for VD Energieeffizienz — flag the deadline (Aug 15) and link it to [[VD Energieeffizienz]]."
+                  className="resize-none rounded-lg p-3 text-sm outline-none"
+                  style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text)', minHeight: '120px', fontFamily: 'inherit' }}
+                />
+                <p className="text-xs" style={{ color: 'var(--text-subtle)' }}>
+                  Your notes take precedence over the extracted/OCR&apos;d text and are folded into the
+                  note&apos;s &ldquo;For future Claude&rdquo; summary.
+                </p>
+                <div className="flex justify-end gap-2">
+                  <button
+                    onClick={() => void processCurrent(current, '')}
+                    className="px-4 py-2.5 rounded-xl text-sm font-medium transition-all hover:scale-[1.02]"
+                    style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}
+                  >
+                    Skip notes
+                  </button>
+                  <button
+                    onClick={() => void processCurrent(current, notes)}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all hover:scale-[1.02]"
+                    style={{ background: 'linear-gradient(135deg, var(--primary), var(--accent))', color: 'white' }}
+                  >
+                    <Sparkles size={14} /> Create note
+                    <kbd className="text-xs px-1.5 py-0.5 rounded" style={{ background: 'rgba(255,255,255,0.2)' }}>⌘↵</kbd>
+                  </button>
+                </div>
+              </div>
+            )}
 
             {phase === 'ingesting' && (
               <div className="flex items-center gap-2 text-sm py-8 justify-center" style={{ color: 'var(--text-subtle)' }}>

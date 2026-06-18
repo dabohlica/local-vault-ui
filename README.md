@@ -108,6 +108,15 @@ behind a reviewable diff:
   preserved verbatim. Fully local, no model variance. Broken wikilinks and empty
   notes are left for a human (`src/lib/healthFix.ts`).
 
+## Drag-drop ingest (with notes)
+
+Drop a `.md` / `.txt` / `.pdf` / image anywhere in the app. Before the model drafts a note you get a
+**compose step** to attach **optional notes** — these are sent with the file at **high priority** and
+are treated as authoritative: they're folded into the note's "For future Claude" summary and win over
+the extracted/OCR'd text where they conflict (`src/lib/prompts.ts` → `buildIngestPrompt`). Use it to
+flag what matters ("this is the signed contract — surface the Aug 15 deadline, link [[Client]]"). The
+drafted note is shown as a diff to approve before anything is written.
+
 ## Indexing: when it runs & how to debug it
 
 The embedding index updates on several triggers so "I added a note → it's

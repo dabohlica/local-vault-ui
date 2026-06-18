@@ -73,6 +73,10 @@ export async function POST(req: NextRequest) {
     const ext = path.extname(filename).toLowerCase()
     const buffer = Buffer.from(await file.arrayBuffer())
 
+    // Optional user-supplied notes to steer the summary (high priority).
+    const notesField = form.get('notes')
+    const userNotes = typeof notesField === 'string' ? notesField : undefined
+
     // --- Image branch: save to Assets, then have the vision model describe it ---
     if (IMAGE_EXTS.has(ext)) {
       const assetPath = saveImage(filename, buffer)
@@ -92,8 +96,10 @@ export async function POST(req: NextRequest) {
       }
 
       const sourceText = `Image file saved at ${assetPath}.\n\nVisual description and transcribed text:\n${description}`
-      const chunks = await retrieve(description.slice(0, 2000), 6)
-      const messages = buildIngestPrompt(filename, sourceText, chunks, assetPath)
+      // Bias retrieval toward the user's notes too, so related vault notes surface.
+      const retrievalQuery = `${userNotes ? userNotes + ' ' : ''}${description}`.slice(0, 2000)
+      const chunks = await retrieve(retrievalQuery, 6)
+      const messages = buildIngestPrompt(filename, sourceText, chunks, assetPath, userNotes)
       const raw = await ollamaChat({ messages, format: 'json' })
       const out = buildProposal(raw)
       return out instanceof NextResponse ? out : NextResponse.json(out)
@@ -109,8 +115,9 @@ export async function POST(req: NextRequest) {
     }
 
     const clipped = text.slice(0, MAX_CHARS)
-    const chunks = await retrieve(clipped.slice(0, 2000), 6)
-    const messages = buildIngestPrompt(filename, clipped, chunks)
+    const retrievalQuery = `${userNotes ? userNotes + ' ' : ''}${clipped}`.slice(0, 2000)
+    const chunks = await retrieve(retrievalQuery, 6)
+    const messages = buildIngestPrompt(filename, clipped, chunks, undefined, userNotes)
     const raw = await ollamaChat({ messages, format: 'json' })
     const out = buildProposal(raw)
     return out instanceof NextResponse ? out : NextResponse.json(out)

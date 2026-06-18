@@ -83,11 +83,35 @@ Respond with ONLY valid JSON in this exact shape, no other text:
   ]
 }
 
-export function buildIngestPrompt(filename: string, sourceText: string, chunks: RetrievedChunk[], assetPath?: string) {
+export function buildIngestPrompt(
+  filename: string,
+  sourceText: string,
+  chunks: RetrievedChunk[],
+  assetPath?: string,
+  userNotes?: string,
+) {
   const claudeMd = loadClaudeMd()
   const today = new Date().toISOString().slice(0, 10)
+  const notes = userNotes?.trim()
   const embedLine = assetPath
     ? `\n4. Embed the saved image at the top of the body with: ![[${assetPath}]]`
+    : ''
+
+  // The user's own notes are authoritative and must be surfaced prominently — not
+  // buried under the OCR'd / extracted source text.
+  const notesBlock = notes
+    ? `
+
+--- USER'S NOTES ABOUT THIS FILE (HIGHEST PRIORITY) ---
+The user attached these notes when dropping the file. Treat them as AUTHORITATIVE: they MUST be
+reflected prominently and near the top of the note — fold them into the "## For future Claude" summary,
+and where the user's notes conflict with or add to the source text, the user's notes win. Do not drop or
+water them down.
+${notes}`
+    : ''
+
+  const notesPriorityLine = notes
+    ? `\n2b. Reflect the USER'S NOTES (above) prominently in the "## For future Claude" summary — they take precedence over the extracted source.`
     : ''
 
   const system = `You are a local ingest assistant for an Obsidian vault. The vault follows strict
@@ -97,7 +121,7 @@ export function buildIngestPrompt(filename: string, sourceText: string, chunks: 
 ${claudeMd}
 
 --- RELATED EXISTING NOTES (retrieved from the vault) ---
-${chunks.length ? formatChunks(chunks) : '(none retrieved)'}
+${chunks.length ? formatChunks(chunks) : '(none retrieved)'}${notesBlock}
 
 --- TASK ---
 The user dropped a source ${assetPath ? 'image' : 'document'} named "${filename}". Turn it into ONE
@@ -106,10 +130,10 @@ appropriate folder and filename (e.g. Knowledge/<Topic>.md, Learning/<Title>.md,
 The note MUST contain, in order:
 1. YAML frontmatter as the very first thing (real "---" fences, not a code block): date (${today}), type,
    tags, source: "${filename}", confidence.
-2. A "## For future Claude" section: 2-3 sentences summarizing what this is and why it matters.
+2. A "## For future Claude" section: 2-3 sentences summarizing what this is and why it matters.${notesPriorityLine}
 3. A structured summary of the source's key points, with [[wikilinks]] to any related people/projects/topics
    that appear in the related notes above.${embedLine}
-Summarize and structure — do not copy the whole document verbatim. Base it ONLY on the provided source text.
+Summarize and structure — do not copy the whole document verbatim. Base it on the provided source text${notes ? " and, above all, the user's notes" : ''}.
 
 Respond with ONLY valid JSON in this exact shape, no other text, no markdown fences:
 {
@@ -118,9 +142,13 @@ Respond with ONLY valid JSON in this exact shape, no other text, no markdown fen
   "summary": "one sentence summary for the UI"
 }`
 
+  const userContent = notes
+    ? `Source document "${filename}":\n\n${sourceText}\n\n--- MY NOTES (HIGH PRIORITY — make sure these land in the summary) ---\n${notes}`
+    : `Source document "${filename}":\n\n${sourceText}`
+
   return [
     { role: 'system' as const, content: system },
-    { role: 'user' as const, content: `Source document "${filename}":\n\n${sourceText}` },
+    { role: 'user' as const, content: userContent },
   ]
 }
 
