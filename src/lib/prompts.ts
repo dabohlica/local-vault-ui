@@ -47,7 +47,7 @@ ${formatChunks(chunks)}`
   ]
 }
 
-export function buildCurationPrompt(userText: string, chunks: RetrievedChunk[]) {
+export function buildCurationPrompt(userText: string, chunks: RetrievedChunk[], history: PriorMessage[] = []) {
   const claudeMd = loadClaudeMd()
 
   const system = `You are a local curation assistant for Daniel's Obsidian vault. The vault follows strict
@@ -85,8 +85,13 @@ Respond with ONLY valid JSON in this exact shape, no other text:
   "summary": "one sentence summary for the UI"
 }`
 
+  // Recent conversation so requests like "save what we just discussed" or "add that
+  // to his note" resolve against the chat.
+  const recent = history.slice(-6)
+
   return [
     { role: 'system' as const, content: system },
+    ...recent.map(m => ({ role: m.role, content: m.content })),
     { role: 'user' as const, content: userText },
   ]
 }

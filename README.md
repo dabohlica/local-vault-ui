@@ -108,6 +108,16 @@ behind a reviewable diff:
   preserved verbatim. Fully local, no model variance. Broken wikilinks and empty
   notes are left for a human (`src/lib/healthFix.ts`).
 
+## Chat: Ask or Edit
+
+The chat input has an **Ask / Edit vault** toggle:
+- **Ask** — grounded answer from your notes (hybrid retrieval, multi-turn).
+- **Edit vault** — your message becomes an instruction; the model proposes vault changes
+  (create / update / move / delete) via the same curation pipeline, shown **inline as diffs to
+  approve** (nothing is written until you do). Conversation history is included, so "save what we
+  just discussed as a note" or "add that to his note" resolve against the chat. Edit mode uses light
+  chunk-level context so the small model returns clean JSON.
+
 ## Chat: multi-turn + hybrid retrieval
 
 Chat is **multi-turn** — the last few exchanges are sent with each question, so follow-ups resolve

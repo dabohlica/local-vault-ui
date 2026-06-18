@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { retrieveNotes, indexStats, syncIndex } from '@/lib/embeddings'
-import { buildRagPrompt } from '@/lib/prompts'
+import { retrieve, retrieveNotes, indexStats, syncIndex } from '@/lib/embeddings'
+import { buildRagPrompt, buildCurationPrompt } from '@/lib/prompts'
 import { ollamaChat } from '@/lib/ollama'
 import { getConfig } from '@/lib/config'
 import { appendMessages, getHistory } from '@/lib/chatHistory'
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json() as { question: string }
+    const body = await req.json() as { question: string; mode?: 'ask' | 'edit' }
     if (!body.question?.trim()) {
       return NextResponse.json({ error: 'Missing question' }, { status: 400 })
     }
@@ -46,14 +46,40 @@ export async function POST(req: NextRequest) {
     // retrieves nothing useful).
     const retrievalQuery = [...priorUserTurns, body.question].join('\n')
 
-    // Hybrid note-level retrieval with full-note context (not just the matching fragment).
-    const chunks = await retrieveNotes(retrievalQuery, { topNotes: 7, perNoteChars: 6000 })
-    const messages = buildRagPrompt(body.question, chunks, history)
-    const answer = await ollamaChat({ messages })
+    // EDIT MODE — turn the instruction into a reviewable change-proposal (create /
+    // update / move / delete), using the same curation pipeline as the Curate page,
+    // with the chat history so "save what we just discussed" resolves. Nothing is
+    // written here; the client reviews the diffs and applies via /api/curate/apply.
+    // Uses light chunk-level context (not full notes) — a small model produces clean
+    // JSON only with a bounded prompt; full-note context overflows it.
+    if (body.mode === 'edit') {
+      const editChunks = await retrieve(retrievalQuery, 6)
+      const editCitations = Array.from(
+        new Map(editChunks.map(c => [c.notePath, { path: c.notePath, heading: c.heading }])).values()
+      )
+      const messages = buildCurationPrompt(body.question, editChunks, history)
+      const raw = await ollamaChat({ messages, format: 'json' })
+      let result: { changes?: unknown[]; log_entry?: string; summary?: string }
+      try { result = JSON.parse(raw) } catch {
+        return NextResponse.json({ error: 'Model did not return valid JSON', raw }, { status: 502 })
+      }
+      if (!Array.isArray(result.changes) || result.changes.length === 0) {
+        return NextResponse.json({ error: 'The model proposed no changes — try rephrasing the edit.', raw }, { status: 502 })
+      }
+      appendMessages(
+        { role: 'user', content: body.question },
+        { role: 'assistant', content: `Proposed ${result.changes.length} change(s): ${result.summary ?? ''}`.trim() },
+      )
+      return NextResponse.json({ mode: 'edit', changes: result.changes, log_entry: result.log_entry, summary: result.summary, citations: editCitations })
+    }
 
+    // ASK MODE — grounded answer over full-note hybrid retrieval.
+    const chunks = await retrieveNotes(retrievalQuery, { topNotes: 7, perNoteChars: 6000 })
     const citations = Array.from(
       new Map(chunks.map(c => [c.notePath, { path: c.notePath, heading: c.heading }])).values()
     )
+    const messages = buildRagPrompt(body.question, chunks, history)
+    const answer = await ollamaChat({ messages })
 
     // Persist the exchange to the lightweight (7-day) history.
     appendMessages(
