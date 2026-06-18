@@ -131,11 +131,13 @@ similarity ranked it poorly (short name queries embed badly).
 
 ## Chat history & capturing conversations
 
-Chat keeps a **lightweight, local history** — the recent thread is restored on load and **auto-clears
-after 7 days** (`src/lib/chatHistory.ts`, stored in gitignored `data/chat-history.json`, capped so it
-never grows large). A **Clear** button wipes it on demand. **Include conversation in vault** runs the
-whole transcript through the normal ingest pipeline (`/api/chat/to-vault` → `buildIngestPrompt`) and
-shows the drafted note as a diff to approve — same path as a dropped document.
+Chat is organized into **sessions** (separate conversations) — a **New chat** button and a sidebar rail
+of recent conversations you can reopen, each auto-titled from its first message. Multi-turn context and
+retrieval stay **within the open session**, so subjects don't bleed across conversations. Still
+lightweight and local (`src/lib/chatHistory.ts`, gitignored `data/chat-sessions.json`): whole sessions
+**auto-clear after 7 days** of inactivity, capped at 50 sessions / 200 messages each. Delete any session
+from the rail. **Save to vault** runs the open conversation through the normal ingest pipeline
+(`/api/chat/to-vault` → `buildIngestPrompt`) and shows the drafted note as a diff to approve.
 
 ## Bulk import (building a vault from scratch)
 

@@ -3,11 +3,11 @@ import { retrieve, retrieveNotes, indexStats, syncIndex } from '@/lib/embeddings
 import { buildRagPrompt, buildCurationPrompt } from '@/lib/prompts'
 import { ollamaChat } from '@/lib/ollama'
 import { getConfig } from '@/lib/config'
-import { appendMessages, getHistory } from '@/lib/chatHistory'
+import { appendToSession, getSession } from '@/lib/chatHistory'
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json() as { question: string; mode?: 'ask' | 'edit' }
+    const body = await req.json() as { question: string; mode?: 'ask' | 'edit'; sessionId?: string }
     if (!body.question?.trim()) {
       return NextResponse.json({ error: 'Missing question' }, { status: 400 })
     }
@@ -36,9 +36,8 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    // Prior turns (persisted, last 7 days) give the conversation memory + let us
-    // resolve follow-ups ("what about his role?") during retrieval.
-    const history = getHistory()
+    // Prior turns from THIS session only — context never bleeds across conversations.
+    const history = body.sessionId ? (getSession(body.sessionId)?.messages ?? []) : []
     const priorUserTurns = history.filter(m => m.role === 'user').slice(-2).map(m => m.content)
 
     // Expand the retrieval query with recent user turns so pronouns/topics in a
@@ -66,11 +65,11 @@ export async function POST(req: NextRequest) {
       if (!Array.isArray(result.changes) || result.changes.length === 0) {
         return NextResponse.json({ error: 'The model proposed no changes — try rephrasing the edit.', raw }, { status: 502 })
       }
-      appendMessages(
+      const sid = appendToSession(body.sessionId, [
         { role: 'user', content: body.question },
         { role: 'assistant', content: `Proposed ${result.changes.length} change(s): ${result.summary ?? ''}`.trim() },
-      )
-      return NextResponse.json({ mode: 'edit', changes: result.changes, log_entry: result.log_entry, summary: result.summary, citations: editCitations })
+      ])
+      return NextResponse.json({ mode: 'edit', changes: result.changes, log_entry: result.log_entry, summary: result.summary, citations: editCitations, sessionId: sid })
     }
 
     // ASK MODE — grounded answer over full-note hybrid retrieval.
@@ -81,13 +80,13 @@ export async function POST(req: NextRequest) {
     const messages = buildRagPrompt(body.question, chunks, history)
     const answer = await ollamaChat({ messages })
 
-    // Persist the exchange to the lightweight (7-day) history.
-    appendMessages(
+    // Persist the exchange to this session (created if new).
+    const sid = appendToSession(body.sessionId, [
       { role: 'user', content: body.question },
       { role: 'assistant', content: answer, citations },
-    )
+    ])
 
-    return NextResponse.json({ answer, citations })
+    return NextResponse.json({ answer, citations, sessionId: sid })
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : 'Chat failed' },
