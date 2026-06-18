@@ -25,7 +25,9 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en">
+    // THEME_INIT adds class="dark" to <html> before hydration, so the client tree
+    // intentionally differs from the server HTML here — suppress that one warning.
+    <html lang="en" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT }} />
       </head>
