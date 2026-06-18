@@ -6,6 +6,7 @@ import {
   FolderOpen, Cpu, Database, CheckCircle2, XCircle, Loader2, Download,
   ArrowRight, BookOpen, RefreshCw, Sparkles, Clock,
 } from 'lucide-react'
+import { DiagnosticsCard } from '@/components/setup/DiagnosticsCard'
 
 type Status = {
   configured: boolean
@@ -380,6 +381,9 @@ export default function SetupPage() {
           </div>
         )}
       </StepCard>
+
+      {/* Diagnostics — only once a vault is connected, to debug indexing wiring */}
+      {vaultReady && <DiagnosticsCard />}
 
       <button
         onClick={() => router.push('/')}

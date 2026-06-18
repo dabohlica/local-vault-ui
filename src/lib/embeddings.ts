@@ -302,6 +302,21 @@ export async function retrieveNotes(
   return out
 }
 
+// Distinct note paths currently present in the index — used by diagnostics to
+// show which on-disk notes are NOT indexed (the usual cause of "it can't find my
+// note" / "chunks don't change").
+export function listIndexedNotePaths(): string[] {
+  const rows = getDb().prepare('SELECT DISTINCT note_path FROM chunks').all() as Array<{ note_path: string }>
+  return rows.map(r => r.note_path)
+}
+
+// Absolute path of the SQLite index — surfaced in diagnostics because it's
+// derived from process.cwd(), and launching the app from a different working
+// directory yields a different (empty) DB, which looks like "indexing is broken".
+export function indexDbPath(): string {
+  return DB_PATH
+}
+
 export function indexStats(): { notes: number; chunks: number; hasIndex: boolean } {
   const database = getDb()
   const row = database.prepare(

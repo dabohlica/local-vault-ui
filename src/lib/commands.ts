@@ -25,11 +25,20 @@ export const CONTRACT_INSTRUCTIONS = `
 Respond with ONLY valid JSON in this exact shape, no other text, no markdown fences:
 {
   "changes": [
-    { "path": "Folder/Note.md", "action": "create" | "update", "content": "...FULL file content..." }
+    { "path": "Folder/Note.md", "action": "create" | "update", "content": "...FULL file content..." },
+    { "action": "move", "from": "Old/Path.md", "to": "New/Path.md" },
+    { "action": "delete", "path": "Folder/Obsolete.md" }
   ],
   "log_entry": "one short paragraph describing what was done and why, for the operations log",
   "summary": "one sentence summary for the UI"
 }
+As the vault's caretaker you may also reorganize it, not just write notes:
+- "move" renames or relocates a note (e.g. file a stray note into the right folder, rename to match
+  conventions). Optionally include "content" to also rewrite it during the move.
+- "delete" removes a note (use sparingly — only for clear duplicates or explicitly obsolete notes).
+- To move INFORMATION from note A to note B: emit an "update" for B with the merged content AND an
+  "update" for A with the moved section removed (or a "delete" of A if it becomes empty).
+Every change is shown to the user as a reviewable diff before anything is written — propose freely.
 When updating an existing file, return its FULL new content, not a diff.
 Follow the vault's AI-first rules. Each note's "content" MUST be structured in this exact order:
 1. YAML frontmatter as the very FIRST thing — real YAML between "---" fences (NOT inside a markdown code block),

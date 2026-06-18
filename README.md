@@ -91,6 +91,44 @@ follow the "AI-first" rules: rich frontmatter, a "For future Claude" preamble, m
 `[[wikilinks]]`, recency markers, and confidence levels. Nothing is written until you approve
 the diff.
 
+## The local model as caretaker
+
+The local LLM doesn't just answer questions — it reorganizes the vault, always
+behind a reviewable diff:
+
+- **Move / rename / delete.** Curation and every command can emit `move`
+  (`{from, to}`) and `delete` (`{path}`) actions, not just `create`/`update`. Ask
+  e.g. *"file this stray note under Projects and rename it to match conventions"*
+  or *"move the decisions from the meeting note into the project page"* — the model
+  proposes the moves/edits, you approve each in the diff view
+  (`src/app/api/curate/apply/route.ts`, `src/components/shared/ProposalReview.tsx`).
+- **Health auto-fix.** Commands → **Vault Health** → **Auto-fix structure**
+  deterministically adds missing frontmatter and a "For future Claude" preamble
+  (summarised from each note's own first paragraph), 12 notes at a time, content
+  preserved verbatim. Fully local, no model variance. Broken wikilinks and empty
+  notes are left for a human (`src/lib/healthFix.ts`).
+
+## Indexing: when it runs & how to debug it
+
+The embedding index updates on several triggers so "I added a note → it's
+searchable" just works:
+
+- **Live watcher** (`src/lib/watcher.ts`) — watches the vault dir and incrementally
+  re-indexes ~3s after any `.md` add/change/delete, **including edits made in
+  Obsidian**. (Recursive watching works on macOS + Windows; on Linux it falls back
+  to the periodic sync below.)
+- **On every applied change** (curate/command/ingest) and **on chat**.
+- **Scheduled** sync every *N* hours + nightly full caretake (see below).
+
+**If notes aren't showing up** (e.g. "chunk totals don't change"), open **Settings →
+Diagnostics** (`/api/diagnostics`). It shows, side by side: the configured vault
+path, **notes on disk vs. indexed notes vs. chunks**, the embed model + Ollama
+reachability, the **exact index DB path and launch cwd**, and a list of on-disk
+notes not yet indexed — with a plain-language verdict and a one-click **Rebuild
+index**. The usual culprits it surfaces: a wrong/nested vault path, the embed model
+not installed, or the app launched from a different working directory (which uses a
+different `data/index.sqlite`).
+
 ## Vault initialization & caretaking
 
 **Initialize an empty vault.** Point the wizard at a brand-new/empty folder and Step 1 offers

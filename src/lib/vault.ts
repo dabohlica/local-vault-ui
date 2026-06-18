@@ -118,6 +118,24 @@ export function listAllNotes(dirPath?: string): Array<{ path: string; mtime: Dat
   return files
 }
 
+// Move/rename a note within the vault. Both ends are path-contained. Creates the
+// destination folder if needed; refuses to clobber an existing destination.
+export function moveNote(from: string, to: string): void {
+  const src = resolveVaultPath(from)
+  const dst = resolveVaultPath(to)
+  if (!fs.existsSync(src)) throw new Error(`Source not found: ${from}`)
+  if (fs.existsSync(dst)) throw new Error(`Destination already exists: ${to}`)
+  fs.mkdirSync(path.dirname(dst), { recursive: true })
+  fs.renameSync(src, dst)
+}
+
+// Delete a note from the vault (path-contained).
+export function deleteNote(target: string): void {
+  const abs = resolveVaultPath(target)
+  if (!fs.existsSync(abs)) return // already gone — idempotent
+  fs.rmSync(abs)
+}
+
 export function appendToLog(entry: string) {
   const today = new Date().toISOString().slice(0, 10)
   const logPath = path.join(getVaultPath(), 'Logs', `${today}.md`)

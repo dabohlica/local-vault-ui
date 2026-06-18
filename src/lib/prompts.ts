@@ -60,10 +60,18 @@ list, a decision log, a person note). For each file:
   people/projects, recency markers and confidence levels where relevant.
 - Use today's date where needed: ${new Date().toISOString().slice(0, 10)}.
 
+As the vault's caretaker you may also reorganize it, not only write notes. Besides
+"create"/"update", you can emit "move" (rename/relocate a note; optionally include "content" to also
+rewrite it) and "delete" (remove a clear duplicate or obsolete note). To move INFORMATION from note A
+to note B, update B with the merged content and update (or delete) A. Every change is reviewed as a
+diff before anything is written, so propose reorganizations freely.
+
 Respond with ONLY valid JSON in this exact shape, no other text:
 {
   "changes": [
-    { "path": "Projects/Example.md", "action": "update", "content": "...full file content..." }
+    { "path": "Projects/Example.md", "action": "update", "content": "...full file content..." },
+    { "action": "move", "from": "Inbox/Stray.md", "to": "Projects/Stray.md" },
+    { "action": "delete", "path": "Projects/Duplicate.md" }
   ],
   "log_entry": "one paragraph describing what was curated and why, for the operations log",
   "summary": "one sentence summary for the UI"

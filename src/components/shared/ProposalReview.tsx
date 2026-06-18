@@ -1,12 +1,26 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Loader2, Check, X, FilePlus, FileEdit } from 'lucide-react'
+import { Loader2, Check, X, FilePlus, FileEdit, ArrowRightLeft, Trash2 } from 'lucide-react'
 import { DiffView } from '@/components/curate/DiffView'
 import { useToast } from '@/components/shared/Toast'
 
-export type Change = { path: string; action: 'create' | 'update'; content: string; before?: string | null }
+export type Change = {
+  path: string
+  action: 'create' | 'update' | 'move' | 'delete'
+  content?: string
+  before?: string | null
+  from?: string // move source
+  to?: string   // move destination (defaults to path)
+}
 export type ProposalResponse = { changes: Change[]; log_entry: string; summary: string; error?: string; raw?: string }
+
+const ACTION_META = {
+  create: { icon: FilePlus, color: 'var(--success)' },
+  update: { icon: FileEdit, color: 'var(--warning)' },
+  move: { icon: ArrowRightLeft, color: 'var(--primary)' },
+  delete: { icon: Trash2, color: 'var(--danger)' },
+} as const
 
 type Props = {
   result: ProposalResponse
@@ -24,11 +38,25 @@ export function ProposalReview({ result, onApplied, onDiscard }: Props) {
   const [applying, setApplying] = useState(false)
 
   // Fetch the current content of each target so the diff shows real before/after.
+  // Only create/update are normalized by what's on disk; move/delete keep their
+  // declared action (a delete is still a delete even though the file exists).
   useEffect(() => {
     let active = true
     void (async () => {
       const enriched = await Promise.all(
         result.changes.map(async (c) => {
+          if (c.action === 'move' || c.action === 'delete') {
+            // Show the current content of the file being moved/deleted as "before".
+            const src = c.action === 'move' ? (c.from ?? c.path) : c.path
+            try {
+              const r = await fetch(`/api/vault/file?path=${encodeURIComponent(src)}`)
+              if (r.ok) {
+                const d = await r.json() as { content: string }
+                return { ...c, before: d.content }
+              }
+            } catch { /* ignore */ }
+            return { ...c, before: null }
+          }
           try {
             const r = await fetch(`/api/vault/file?path=${encodeURIComponent(c.path)}`)
             if (r.ok) {
@@ -65,7 +93,7 @@ export function ProposalReview({ result, onApplied, onDiscard }: Props) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          changes: selected.map(({ path, action, content }) => ({ path, action, content })),
+          changes: selected.map(({ path, action, content, from, to }) => ({ path, action, content, from, to })),
           log_entry: result.log_entry,
         }),
       })
@@ -86,26 +114,40 @@ export function ProposalReview({ result, onApplied, onDiscard }: Props) {
         <p className="text-sm" style={{ color: 'var(--text)' }}>{result.summary}</p>
       </div>
 
-      {changes.map(change => (
-        <div key={change.path} className="card p-4 flex flex-col gap-2">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              {change.action === 'create'
-                ? <FilePlus size={14} style={{ color: 'var(--success)' }} />
-                : <FileEdit size={14} style={{ color: 'var(--warning)' }} />}
-              <span className="text-sm font-medium" style={{ color: 'var(--text)' }}>{change.path}</span>
-              <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: 'var(--bg-elevated)', color: 'var(--text-subtle)' }}>
-                {change.action}
-              </span>
+      {changes.map(change => {
+        const meta = ACTION_META[change.action] ?? ACTION_META.update
+        const Icon = meta.icon
+        const label = change.action === 'move'
+          ? `${change.from ?? '?'}  →  ${change.to ?? change.path}`
+          : change.path
+        // For delete, the "after" is empty (the note is removed). For move with no
+        // content rewrite, after = before (relocated unchanged).
+        const after = change.action === 'delete'
+          ? ''
+          : change.content ?? change.before ?? ''
+        return (
+          <div key={change.path} className="card p-4 flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 min-w-0">
+                <Icon size={14} style={{ color: meta.color, flexShrink: 0 }} />
+                <span className="text-sm font-medium truncate" style={{ color: 'var(--text)' }}>{label}</span>
+                <span className="text-xs px-2 py-0.5 rounded-full flex-shrink-0" style={{ background: 'var(--bg-elevated)', color: 'var(--text-subtle)' }}>
+                  {change.action}
+                </span>
+              </div>
+              <label className="flex items-center gap-1.5 text-xs cursor-pointer flex-shrink-0" style={{ color: 'var(--text-muted)' }}>
+                <input type="checkbox" checked={approved.has(change.path)} onChange={() => toggle(change.path)} />
+                Apply this change
+              </label>
             </div>
-            <label className="flex items-center gap-1.5 text-xs cursor-pointer" style={{ color: 'var(--text-muted)' }}>
-              <input type="checkbox" checked={approved.has(change.path)} onChange={() => toggle(change.path)} />
-              Apply this change
-            </label>
+            {change.action === 'move' && change.content === undefined ? (
+              <p className="text-xs" style={{ color: 'var(--text-subtle)' }}>File relocated unchanged.</p>
+            ) : (
+              <DiffView before={change.before ?? null} after={after} />
+            )}
           </div>
-          <DiffView before={change.before ?? null} after={change.content} />
-        </div>
-      ))}
+        )
+      })}
 
       <div className="flex justify-end gap-2">
         {onDiscard && (

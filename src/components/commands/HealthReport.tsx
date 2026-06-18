@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Loader2, Activity, AlertTriangle, FileWarning, Link2Off, FileX, CheckCircle2 } from 'lucide-react'
+import { Loader2, Activity, AlertTriangle, FileWarning, Link2Off, FileX, CheckCircle2, Wand2 } from 'lucide-react'
+import { ProposalReview, type ProposalResponse } from '@/components/shared/ProposalReview'
 
 type Issue = { path: string; kind: string; detail: string }
 type Report = {
@@ -24,6 +25,8 @@ export function HealthReport() {
   const [report, setReport] = useState<Report | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [fixing, setFixing] = useState(false)
+  const [proposal, setProposal] = useState<ProposalResponse | null>(null)
 
   async function scan() {
     setLoading(true)
@@ -37,6 +40,28 @@ export function HealthReport() {
       setError(err instanceof Error ? err.message : 'Scan failed')
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function fixWithAI() {
+    if (fixing) return
+    setFixing(true)
+    setError(null)
+    setProposal(null)
+    try {
+      const res = await fetch('/api/commands/health/fix', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ limit: 12 }),
+      })
+      const data = await res.json() as ProposalResponse
+      if (!res.ok) throw new Error(data.error ?? 'Fix failed')
+      if (!data.changes?.length) throw new Error('No auto-fixable issues in this batch.')
+      setProposal(data)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Fix failed')
+    } finally {
+      setFixing(false)
     }
   }
 
@@ -117,13 +142,44 @@ export function HealthReport() {
         </div>
       )}
 
-      <button
-        onClick={() => void scan()}
-        className="self-start flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-150 hover:scale-[1.02]"
-        style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}
-      >
-        <Activity size={13} /> Re-scan
-      </button>
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => void scan()}
+          className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-150 hover:scale-[1.02]"
+          style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}
+        >
+          <Activity size={13} /> Re-scan
+        </button>
+        {total > 0 && (
+          <button
+            onClick={() => void fixWithAI()}
+            disabled={fixing}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-150 hover:scale-[1.02] disabled:opacity-50"
+            style={{ background: 'linear-gradient(135deg, var(--primary), var(--accent))', color: 'white' }}
+            title="Deterministically add missing frontmatter and the 'For future Claude' preamble, batch by batch, for your review"
+          >
+            {fixing ? <Loader2 size={13} className="animate-spin" /> : <Wand2 size={13} />}
+            {fixing ? 'Fixing…' : 'Auto-fix structure'}
+          </button>
+        )}
+      </div>
+
+      {total > 0 && (
+        <p className="text-xs" style={{ color: 'var(--text-subtle)' }}>
+          Auto-fix adds missing frontmatter and a &ldquo;For future Claude&rdquo; preamble (summarised
+          from each note&rsquo;s own first paragraph) — deterministic and fully local, your content is
+          preserved. 12 notes at a time, each shown as a diff to approve. Broken wikilinks and empty
+          notes need a human and are left as-is.
+        </p>
+      )}
+
+      {proposal && (
+        <ProposalReview
+          result={proposal}
+          onApplied={() => { setProposal(null); void scan() }}
+          onDiscard={() => setProposal(null)}
+        />
+      )}
     </div>
   )
 }
