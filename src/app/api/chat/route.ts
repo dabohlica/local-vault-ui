@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { retrieve, indexStats, syncIndex } from '@/lib/embeddings'
+import { retrieveNotes, indexStats, syncIndex } from '@/lib/embeddings'
 import { buildRagPrompt } from '@/lib/prompts'
 import { ollamaChat } from '@/lib/ollama'
 import { getConfig } from '@/lib/config'
@@ -35,7 +35,8 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    const chunks = await retrieve(body.question, 8)
+    // Note-level retrieval with full-note context (not just the matching fragment).
+    const chunks = await retrieveNotes(body.question, { topNotes: 6, perNoteChars: 6000 })
     const messages = buildRagPrompt(body.question, chunks)
     const answer = await ollamaChat({ messages })
 

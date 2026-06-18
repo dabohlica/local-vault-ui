@@ -84,16 +84,17 @@ function splitText(text: string, maxLen: number, overlap = CHUNK_OVERLAP_CHARS):
   return out
 }
 
-// Split a note into self-contained, size-bounded chunks: the frontmatter is
-// prefixed to every chunk so each stands alone, per the vault's AI-first rule.
+// Split a note into size-bounded chunks. Each chunk is prefixed with a short
+// "<note title> — <heading>" header for context, NOT the full frontmatter:
+// prepending identical frontmatter to every chunk pulls their embeddings toward
+// frontmatter similarity (so unrelated daily/log notes mis-match), and crowds out
+// the actual prose. The header keeps just enough context to stay self-locating.
 export function chunkNote(notePath: string, content: string): Array<{ heading: string; content: string }> {
   const fmMatch = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/.exec(content)
-  const frontmatter = fmMatch ? fmMatch[0] : ''
   const body = fmMatch ? content.slice(fmMatch[0].length) : content
+  const title = path.basename(notePath).replace(/\.md$/, '')
 
-  // Leave room for the prefixed frontmatter within the chunk budget.
-  const budget = Math.max(500, MAX_CHUNK_CHARS - frontmatter.length)
-
+  const budget = Math.max(500, MAX_CHUNK_CHARS - title.length - 40)
   const sections = body.split(/\n(?=#{1,6}\s)/)
   const chunks: Array<{ heading: string; content: string }> = []
 
@@ -102,8 +103,9 @@ export function chunkNote(notePath: string, content: string): Array<{ heading: s
     if (!trimmed) return
     const headingMatch = /^(#{1,6})\s+(.*)/.exec(trimmed)
     const heading = headingMatch ? headingMatch[2].trim() : '(intro)'
+    const header = heading === '(intro)' ? title : `${title} — ${heading}`
     for (const piece of splitText(trimmed, budget)) {
-      chunks.push({ heading, content: `${frontmatter}${piece}` })
+      chunks.push({ heading, content: `${header}\n\n${piece}` })
     }
   }
 
@@ -252,6 +254,52 @@ export async function retrieve(query: string, k = 6): Promise<RetrievedChunk[]> 
 
   scored.sort((a, b) => b.score - a.score)
   return scored.slice(0, k)
+}
+
+// Note-level retrieval with context expansion: rank notes by their best-matching
+// chunk, then return the FULL note content for the top notes (deduping identical
+// copies, e.g. duplicate imports). This fixes "found the right note but it has no
+// description" — a single chunk is a fragment; the answer often lives elsewhere
+// in the same note.
+export async function retrieveNotes(
+  query: string,
+  opts: { topNotes?: number; perNoteChars?: number } = {}
+): Promise<RetrievedChunk[]> {
+  const topNotes = opts.topNotes ?? 6
+  const perNoteChars = opts.perNoteChars ?? 6000
+
+  const database = getDb()
+  const queryEmbedding = await ollamaEmbed(query)
+  const rows = database.prepare('SELECT * FROM chunks').all() as ChunkRow[]
+
+  // Best chunk score per note.
+  const best = new Map<string, number>()
+  for (const row of rows) {
+    const score = cosineSimilarity(queryEmbedding, JSON.parse(row.embedding) as number[])
+    const prev = best.get(row.note_path)
+    if (prev === undefined || score > prev) best.set(row.note_path, score)
+  }
+
+  const ranked = Array.from(best.entries()).sort((a, b) => b[1] - a[1])
+
+  const out: RetrievedChunk[] = []
+  const seen = new Set<string>() // dedup identical-content notes (duplicate imports)
+  for (const [notePath, score] of ranked) {
+    if (out.length >= topNotes) break
+    let raw: string
+    try {
+      raw = fs.readFileSync(resolveVaultPath(notePath), 'utf-8')
+    } catch {
+      continue
+    }
+    const body = raw.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, '').trim()
+    if (!body) continue
+    const key = body.slice(0, 400) // cheap near-duplicate key
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push({ notePath, heading: '(full note)', content: body.slice(0, perNoteChars), score })
+  }
+  return out
 }
 
 export function indexStats(): { notes: number; chunks: number; hasIndex: boolean } {
