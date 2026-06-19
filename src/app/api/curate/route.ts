@@ -3,6 +3,7 @@ import { retrieve } from '@/lib/embeddings'
 import { buildCurationPrompt } from '@/lib/prompts'
 import { ollamaChat } from '@/lib/ollama'
 import { normalizeChanges } from '@/lib/healthFix'
+import { parseModelJson } from '@/lib/modelJson'
 
 type CurationResult = {
   changes: Array<{ path: string; action: 'create' | 'update' | 'move' | 'delete'; content?: string; from?: string; to?: string }>
@@ -21,10 +22,8 @@ export async function POST(req: NextRequest) {
     const messages = buildCurationPrompt(body.text, chunks)
     const raw = await ollamaChat({ messages, format: 'json' })
 
-    let result: CurationResult
-    try {
-      result = JSON.parse(raw) as CurationResult
-    } catch {
+    const result = parseModelJson<CurationResult>(raw)
+    if (!result) {
       return NextResponse.json(
         { error: 'Model did not return valid JSON', raw },
         { status: 502 }

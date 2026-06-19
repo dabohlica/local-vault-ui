@@ -6,6 +6,7 @@ import { buildIngestPrompt } from '@/lib/prompts'
 import { ollamaChat, ollamaVisionChat } from '@/lib/ollama'
 import { getVaultPath } from '@/lib/vault'
 import { normalizeChanges } from '@/lib/healthFix'
+import { parseModelJson } from '@/lib/modelJson'
 
 export const dynamic = 'force-dynamic'
 
@@ -50,10 +51,8 @@ function saveImage(filename: string, buffer: Buffer): string {
 }
 
 function buildProposal(raw: string): NextResponse | IngestResult {
-  let result: IngestResult
-  try {
-    result = JSON.parse(raw) as IngestResult
-  } catch {
+  const result = parseModelJson<IngestResult>(raw)
+  if (!result) {
     return NextResponse.json({ error: 'Model did not return valid JSON', raw }, { status: 502 })
   }
   if (!Array.isArray(result.changes) || result.changes.length === 0) {

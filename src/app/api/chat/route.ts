@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { retrieve, retrieveNotes, indexStats, syncIndex } from '@/lib/embeddings'
 import { buildRagPrompt, buildCurationPrompt } from '@/lib/prompts'
 import { normalizeChanges } from '@/lib/healthFix'
+import { parseModelJson } from '@/lib/modelJson'
 import { ollamaChat } from '@/lib/ollama'
 import { getConfig } from '@/lib/config'
 import { appendToSession, getSession } from '@/lib/chatHistory'
@@ -59,8 +60,8 @@ export async function POST(req: NextRequest) {
       )
       const messages = buildCurationPrompt(body.question, editChunks, history)
       const raw = await ollamaChat({ messages, format: 'json' })
-      let result: { changes?: unknown[]; log_entry?: string; summary?: string }
-      try { result = JSON.parse(raw) } catch {
+      const result = parseModelJson<{ changes?: unknown[]; log_entry?: string; summary?: string }>(raw)
+      if (!result) {
         return NextResponse.json({ error: 'Model did not return valid JSON', raw }, { status: 502 })
       }
       if (!Array.isArray(result.changes) || result.changes.length === 0) {

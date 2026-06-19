@@ -151,7 +151,7 @@ context, preserve existing items and only make the requested changes. Link relat
     mode: 'local-model',
     inputLabel: 'Recap scope (e.g. "today" or "this week")',
     inputPlaceholder: 'e.g. this week',
-    retrieveK: 10,
+    retrieveK: 6,
     instructions: `Using the retrieved recent notes as source, write a concise recap. Save it to
 Knowledge/Recaps/{{TODAY}} Recap.md. Summarize what happened, decisions made, and open follow-ups, citing
 source notes with [[wikilinks]]. Do not invent events not present in the retrieved context.`,
@@ -164,7 +164,7 @@ source notes with [[wikilinks]]. Do not invent events not present in the retriev
     mode: 'local-model',
     inputLabel: 'Topic to synthesize',
     inputPlaceholder: 'e.g. everything I know about local AI / RAG',
-    retrieveK: 12,
+    retrieveK: 7,
     instructions: `Synthesize the retrieved notes on the given topic into a single coherent permanent note at
 Knowledge/<Topic>.md. Connect ideas across notes, cite every source with [[wikilinks]], and mark
 confidence levels. Base it ONLY on the retrieved context — do not fabricate.`,

@@ -5,6 +5,7 @@ import { retrieve } from '@/lib/embeddings'
 import { buildIngestPrompt } from '@/lib/prompts'
 import { ollamaChat } from '@/lib/ollama'
 import { normalizeChanges } from '@/lib/healthFix'
+import { parseModelJson } from '@/lib/modelJson'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
@@ -51,8 +52,8 @@ export async function POST(req: NextRequest) {
         const chunks = await retrieve(clipped.slice(0, 2000), 5)
         const messages = buildIngestPrompt(pseudoName, clipped, chunks)
         const raw = await ollamaChat({ messages, format: 'json' })
-        const parsed = JSON.parse(raw) as { changes?: Change[] }
-        for (const c of parsed.changes ?? []) {
+        const parsed = parseModelJson<{ changes?: Change[] }>(raw)
+        for (const c of parsed?.changes ?? []) {
           if (!c?.path || c.content === undefined) continue
           // De-dupe target paths within the batch so notes don't clobber each other.
           let p = c.path

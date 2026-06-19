@@ -4,6 +4,7 @@ import { buildCommandPrompt } from '@/lib/prompts'
 import { ollamaChat } from '@/lib/ollama'
 import { getLocalCommand } from '@/lib/commands'
 import { normalizeChanges } from '@/lib/healthFix'
+import { parseModelJson } from '@/lib/modelJson'
 
 type CommandResult = {
   changes: Array<{ path: string; action: 'create' | 'update' | 'move' | 'delete'; content?: string; from?: string; to?: string }>
@@ -29,16 +30,18 @@ export async function POST(req: NextRequest) {
     const messages = buildCommandPrompt(command, body.input, chunks)
     const raw = await ollamaChat({ messages, format: 'json' })
 
-    let result: CommandResult
-    try {
-      result = JSON.parse(raw) as CommandResult
-    } catch {
+    const result = parseModelJson<CommandResult>(raw)
+    if (!result) {
       return NextResponse.json({ error: 'Model did not return valid JSON', raw }, { status: 502 })
     }
-
     if (!Array.isArray(result.changes)) {
       return NextResponse.json({ error: 'Model response missing "changes" array', raw }, { status: 502 })
     }
+    // Drop malformed changes (no path on a create/update) before normalizing.
+    result.changes = result.changes.filter(c =>
+      c && (((c.action === 'create' || c.action === 'update') && c.path && c.content !== undefined) ||
+            (c.action === 'move' && c.from && c.to) ||
+            (c.action === 'delete' && c.path)))
 
     result.changes = normalizeChanges(result.changes)
     return NextResponse.json(result)

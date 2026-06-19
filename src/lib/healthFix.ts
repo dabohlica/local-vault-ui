@@ -92,12 +92,15 @@ export function ensureStructure(notePath: string, content: string, today?: strin
 }
 
 // Normalize the create/update notes in a change-proposal (move/delete untouched).
-export function normalizeChanges<T extends { path: string; action: string; content?: string; from?: string; to?: string }>(changes: T[]): T[] {
-  return changes.map(c =>
-    (c.action === 'create' || c.action === 'update') && typeof c.content === 'string'
-      ? { ...c, content: ensureStructure(c.to ?? c.path, c.content) }
+// Defensive: a model can emit a malformed change with no path/content — pass those
+// through untouched rather than throwing (which would fail the whole command).
+export function normalizeChanges<T extends { path?: string; action?: string; content?: string; from?: string; to?: string }>(changes: T[]): T[] {
+  return changes.map(c => {
+    const target = c.to ?? c.path
+    return (c.action === 'create' || c.action === 'update') && typeof c.content === 'string' && typeof target === 'string' && target
+      ? { ...c, content: ensureStructure(target, c.content) }
       : c
-  )
+  })
 }
 
 const DETERMINISTIC: HealthIssue['kind'][] = ['missing-frontmatter', 'missing-preamble']
