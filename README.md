@@ -4,27 +4,32 @@ A local, single-user web app for browsing, searching, querying, and curating an
 Obsidian vault. All AI runs **locally via [Ollama](https://ollama.com)** — vault data
 never leaves the device. Point it at *your* vault; nothing is hardcoded.
 
-## Quickstart (for colleagues)
+## Quickstart
+
+> **📖 Full walkthrough: [SETUP.md](SETUP.md)** — one guide covering install, setup, and start, with a
+> path for **"I already have a vault of notes"** and one for **"starting from scratch"**.
 
 ```bash
-# 1. Install Ollama (one time) — https://ollama.com — then make sure it's running:
-ollama serve            # leave running in the background
+# 1. Install Ollama (https://ollama.com) and leave it running:
+ollama serve
 
-# 2. Get the app
+# 2. Get the app:
 git clone <repo-url> vault-ui && cd vault-ui
 npm install
 npm run dev             # opens http://localhost:3000
 ```
 
-That's it — **the app walks you through the rest.** On first launch you land on a 3-step
-setup wizard:
+The app walks you through the rest (connect vault → pick/pull models → build index). No `.env`
+editing. Then pick your path:
 
-1. **Connect your vault** — paste the path to your Obsidian folder (e.g. `~/Documents/Second-Brain`). Validated live.
-2. **Local AI models** — it detects Ollama and offers a one-click **Pull** for any missing model (chat + embeddings), with download progress. No terminal needed.
-3. **Build the index** — one click embeds your notes locally so Chat can cite them.
+- **Already have a vault full of notes?** Point Step 1 at it → **Build index** → **Enter your vault**.
+  Optional polish: **Vault Health → Auto-fix** then **Interlink**.
+- **Starting from scratch / notes scattered across tools?** Point Step 1 at an empty folder →
+  **Initialize vault** → sidebar **Import** a folder of exports (Markdown/Notion/Evernote/`.docx`/PDF…)
+  → **Interlink**.
 
-When all three are green, click **Enter your vault**. You can change the vault or models
-anytime from **Settings** in the sidebar. No `.env` editing required.
+See [SETUP.md](SETUP.md) for the step-by-step of each path, model recommendations, automatic
+caretaking, and troubleshooting.
 
 ## Security boundary (read this)
 
@@ -39,8 +44,8 @@ vector databases, external telemetry. The only module that makes outbound HTTP r
 
 ## Stack
 
-- Next.js 14 (App Router) + TypeScript + Tailwind
-- Ollama: `qwen2.5:3b` (chat) + `nomic-embed-text` (embeddings)
+- Next.js (App Router) + TypeScript + Tailwind
+- Ollama: `qwen2.5:3b` (chat, default) + `nomic-embed-text` (embeddings) — both swappable in Settings
 - `better-sqlite3` for the local embedding index (cosine similarity over stored chunk vectors)
 
 ## Configuration
@@ -59,18 +64,20 @@ OLLAMA_EMBED_MODEL=nomic-embed-text  # default offered in the wizard
 ```
 
 Recommended models on a 16 GB machine: `qwen2.5:3b` (chat) + `nomic-embed-text` (embeddings).
-Larger chat models (e.g. `gemma4`) give better quality but are slower; swap anytime in Settings.
+Larger chat models (e.g. `qwen2.5:7b`) give better quality but are slower; swap anytime in Settings.
+See [SETUP.md](SETUP.md) for per-machine model recommendations.
 
 ## Features
 
 | Page | What it does |
 |------|--------------|
-| **Dashboard** | Vault stats, recent files, quick capture, AI briefing card |
-| **Chat** | Ask questions about the vault. RAG: embeds the question, retrieves the top-k chunks locally, gemma answers with clickable citations to source notes |
-| **Curate** | Paste meeting notes / a summary. gemma proposes multi-file vault updates (project page, daily note, decision log, person notes) following the vault's AI-first conventions. Review per-file diffs, approve/reject each, then apply. Applied changes are logged to `Logs/YYYY-MM-DD.md` and re-indexed |
-| **Explorer** | File tree + markdown preview |
-| **Search** | Keyword/grep search across notes |
-| **Commands** | Run vault commands |
+| **Dashboard** | Vault stats, recent files, quick capture, AI briefing cards |
+| **Chat** | Ask the vault (hybrid retrieval, multi-turn, sessions) or flip to **Edit** to change it. Answers cite source notes; edits are diffs you approve |
+| **Curate** | Paste raw notes / a meeting summary; the local model proposes multi-file updates (project page, daily note, people, decisions) following the AI-first conventions. Review per-file diffs, approve, apply — logged to `Logs/YYYY-MM-DD.md` and re-indexed |
+| **Import** | Bulk-build a vault from a folder of exports (Markdown/Notion/Evernote/`.docx`/PDF/`.csv`…), batch-reviewed |
+| **Review** | Proposals the overnight caretaker queued for approval |
+| **Commands** | 10 local workflows: Daily · Meeting · Person · Project · Task · Dev Log · Board · Recap · Synthesize · Vault Health · Interlink |
+| **Explorer / Search** | File tree + Markdown preview with live `[[wikilinks]]`; full-text search |
 
 ## How RAG works
 
@@ -104,9 +111,10 @@ behind a reviewable diff:
   (`src/app/api/curate/apply/route.ts`, `src/components/shared/ProposalReview.tsx`).
 - **Health auto-fix.** Commands → **Vault Health** → **Auto-fix structure**
   deterministically adds missing frontmatter and a "For future Claude" preamble
-  (summarised from each note's own first paragraph), 12 notes at a time, content
-  preserved verbatim. Fully local, no model variance. Broken wikilinks and empty
-  notes are left for a human (`src/lib/healthFix.ts`).
+  (summarised from each note's own first paragraph), up to 25 notes at a time,
+  content preserved verbatim, **and creates stub notes so broken `[[links]]`
+  resolve**. Fully local, no model variance. Empty notes are left for a human
+  (`src/lib/healthFix.ts`).
 
 ## No self-inflicting health issues
 
@@ -232,4 +240,4 @@ Settings.
 
 - Local-only tool — no auth; bind to localhost only.
 - The embedding index (`data/`) is rebuildable and gitignored.
-- The chat model is configurable via `OLLAMA_CHAT_MODEL` (default `qwen2.5:3b` — fast on a 16GB M-series machine). Larger models like `gemma4` give better quality but the curation flow (which generates full file contents) can be slow. Curation output is always a proposal to review, not an autonomous write.
+- The chat model is configurable in Settings (default `qwen2.5:3b` — fast on a 16 GB machine). Larger models (e.g. `qwen2.5:7b`) give noticeably better curation/edit quality but are slower. Curation/edit output is always a proposal to review, never an autonomous write.
