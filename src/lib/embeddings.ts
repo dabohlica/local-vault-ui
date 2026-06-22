@@ -2,7 +2,7 @@ import path from 'path'
 import fs from 'fs'
 import Database from 'better-sqlite3'
 import { listAllNotes, resolveVaultPath } from '@/lib/vault'
-import { ollamaEmbed } from '@/lib/ollama'
+import { ollamaEmbed, EMBED_CONTEXT_OVERFLOW } from '@/lib/ollama'
 
 const DB_PATH = path.join(process.cwd(), 'data', 'index.sqlite')
 
@@ -171,8 +171,13 @@ export async function syncIndex(): Promise<{ notes: number; chunks: number; skip
   return embedNotes(stale)
 }
 
+// Split-and-retry ONLY on a genuine context-window overflow (tagged by ollamaEmbed).
+// Previously this matched any error containing "400"/"exceeds"/"too long", so
+// transient failures (model loading, server busy) were misread as "chunk too long"
+// and recursively shredded notes into sub-300-char fragments — inflating the chunk
+// count by 6–10× and making it differ between rebuilds of the SAME notes.
 function isContextError(err: unknown): boolean {
-  return /context length|exceeds|too long|400/i.test(String(err))
+  return String(err).includes(EMBED_CONTEXT_OVERFLOW)
 }
 
 // Embed a chunk, but if the model rejects it for length, split and embed the

@@ -71,9 +71,23 @@ export async function ollamaVisionChat(opts: {
   return data.message.content
 }
 
+// Stable marker we tag onto genuine context-window-overflow errors, so the caller
+// can decide to split-and-retry on THOSE only — not on transient failures (model
+// still loading, server busy) that happen to contain "400"/"too long" in the body.
+// Misclassifying those as overflow is what silently exploded the index into tiny
+// chunks and made the chunk count non-deterministic across rebuilds.
+export const EMBED_CONTEXT_OVERFLOW = 'EMBED_CONTEXT_OVERFLOW'
+
+// Real context-overflow signatures from Ollama / llama.cpp. Deliberately narrow.
+const CONTEXT_OVERFLOW_RE = /context (length|window)|maximum context|exceeds?.*context|input (length|is too) /i
+
 export async function ollamaEmbed(text: string): Promise<number[]> {
   const url = `${OLLAMA_HOST}/api/embed`
   assertLocalHost(url)
+
+  // An empty/whitespace input makes Ollama 400 with a non-context error; never send
+  // one (and never store a bogus embedding for it).
+  if (!text.trim()) throw new Error('Ollama embed failed: empty input')
 
   const res = await fetch(url, {
     method: 'POST',
@@ -85,9 +99,16 @@ export async function ollamaEmbed(text: string): Promise<number[]> {
   })
 
   if (!res.ok) {
-    throw new Error(`Ollama embed failed: ${res.status} ${await res.text()}`)
+    const body = await res.text()
+    // Only a genuine context overflow is tagged for split-and-retry. Everything
+    // else (model loading, OOM, server busy) propagates as a plain failure so the
+    // note is skipped — not silently shredded into sub-300-char fragments.
+    const overflow = (res.status === 400 || res.status === 413) && CONTEXT_OVERFLOW_RE.test(body)
+    throw new Error(`Ollama embed failed: ${res.status} ${body}${overflow ? ` [${EMBED_CONTEXT_OVERFLOW}]` : ''}`)
   }
 
-  const data = await res.json() as { embeddings: number[][] }
-  return data.embeddings[0]
+  const data = await res.json() as { embeddings?: number[][] }
+  const embedding = data.embeddings?.[0]
+  if (!embedding?.length) throw new Error('Ollama embed failed: model returned no embedding')
+  return embedding
 }
