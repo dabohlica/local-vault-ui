@@ -25,10 +25,10 @@ export default function DashboardPage() {
         {/* Quick Capture — 1×1 */}
         <QuickCaptureCard />
 
-        {/* Recent Files — 1×2 */}
+        {/* Recent Files — right column, spans cols 3–4 (under Stats + Quick Capture) */}
         <RecentFilesCard />
 
-        {/* Activity Timeline — 2×2: what changed, where, when (traceability) */}
+        {/* Activity Timeline — directly beneath Recent Files, same width (traceability) */}
         <ActivityTimelineCard />
       </div>
     </div>

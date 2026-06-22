@@ -49,7 +49,7 @@ export function RecentFilesCard() {
   }
 
   return (
-    <div className="card p-4 flex flex-col row-span-2">
+    <div className="card p-4 flex flex-col bento-right-wide">
       <div className="flex items-center gap-2 mb-4">
         <div
           className="w-7 h-7 rounded-lg flex items-center justify-center"
