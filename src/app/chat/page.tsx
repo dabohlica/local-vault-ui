@@ -30,7 +30,6 @@ export default function ChatPage() {
   const [error, setError] = useState<string | null>(null)
   const [capturing, setCapturing] = useState(false)
   const [proposal, setProposal] = useState<ProposalResponse | null>(null)
-  const [mode, setMode] = useState<'ask' | 'edit'>('ask')
 
   const loadSessions = useCallback(async () => {
     try {
@@ -83,19 +82,15 @@ export default function ChatPage() {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question, mode, sessionId }),
+        body: JSON.stringify({ question, mode: 'ask', sessionId }),
       })
       const data = await res.json() as {
-        answer?: string; citations?: Citation[]; error?: string
-        mode?: string; changes?: unknown[]; log_entry?: string; summary?: string; sessionId?: string
+        answer?: string; citations?: Citation[]; error?: string; sessionId?: string
       }
       if (!res.ok) throw new Error(data.error ?? 'Chat failed')
       if (data.sessionId) setSessionId(data.sessionId)
 
-      if (data.mode === 'edit' && data.changes) {
-        setMessages(prev => [...prev, { role: 'assistant', content: `Proposed ${data.changes!.length} change(s): ${data.summary ?? ''}`.trim(), citations: data.citations }])
-        setProposal({ changes: data.changes as ProposalResponse['changes'], log_entry: data.log_entry ?? '', summary: data.summary ?? '' })
-      } else if (data.answer) {
+      if (data.answer) {
         setMessages(prev => [...prev, { role: 'assistant', content: data.answer!, citations: data.citations }])
       } else {
         throw new Error('Empty response')
@@ -209,7 +204,7 @@ export default function ChatPage() {
                   <MessageSquare size={28} style={{ color: 'var(--text-subtle)' }} />
                 </div>
                 <p className="text-sm" style={{ color: 'var(--text-subtle)' }}>
-                  Ask something like &ldquo;What do I know about FreeRange?&rdquo;
+                  Ask something like &ldquo;What do I know about Example Company?&rdquo;
                 </p>
               </div>
             )}
@@ -254,29 +249,16 @@ export default function ChatPage() {
           </div>
 
           <div className="flex-shrink-0 border-t p-3 flex flex-col gap-2" style={{ borderColor: 'var(--border-subtle)' }}>
-            <div className="flex items-center gap-1 self-start rounded-lg p-0.5" style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}>
-              {(['ask', 'edit'] as const).map(mm => (
-                <button
-                  key={mm}
-                  onClick={() => setMode(mm)}
-                  className="px-3 py-1 rounded-md text-xs font-medium transition-all"
-                  style={mode === mm
-                    ? { background: 'linear-gradient(135deg, var(--primary), var(--accent))', color: 'white' }
-                    : { background: 'transparent', color: 'var(--text-muted)' }}
-                >
-                  {mm === 'ask' ? 'Ask' : 'Edit vault'}
-                </button>
-              ))}
-              <span className="text-xs px-2" style={{ color: 'var(--text-subtle)' }}>
-                {mode === 'edit' ? 'changes proposed as diffs to approve' : 'answers from your notes'}
-              </span>
-            </div>
+            <span className="text-xs px-1 self-start" style={{ color: 'var(--text-subtle)' }}>
+              Answers come from your notes. To add knowledge, use <strong>Add</strong> or drag a file in — or
+              save this conversation below.
+            </span>
             <div className="flex gap-2">
               <input
                 value={input}
                 onChange={e => setInput(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter') void send() }}
-                placeholder={mode === 'edit' ? 'Tell the assistant what to change… e.g. "Add a note for Max Müller, CTO at VD"' : 'Ask about your vault…'}
+                placeholder="Ask about your vault…"
                 className="flex-1 rounded-xl px-4 py-2.5 text-sm outline-none"
                 style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text)' }}
               />
@@ -287,7 +269,7 @@ export default function ChatPage() {
                 style={{ background: 'linear-gradient(135deg, var(--primary), var(--accent))', color: 'white' }}
               >
                 <Send size={14} />
-                {mode === 'edit' ? 'Propose' : 'Send'}
+                Send
               </button>
             </div>
           </div>

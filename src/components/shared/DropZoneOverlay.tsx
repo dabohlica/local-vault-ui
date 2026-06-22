@@ -167,7 +167,7 @@ export function DropZoneOverlay() {
                   value={notes}
                   onChange={e => setNotes(e.target.value)}
                   onKeyDown={e => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') void processCurrent(current, notes) }}
-                  placeholder="e.g. This is the signed audit contract for VD Energieeffizienz — flag the deadline (Aug 15) and link it to [[VD Energieeffizienz]]."
+                  placeholder="e.g. This is the signed audit contract for Example Company — flag the deadline (Aug 15) and link it to [[Example Company]]."
                   className="resize-none rounded-lg p-3 text-sm outline-none"
                   style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text)', minHeight: '120px', fontFamily: 'inherit' }}
                 />

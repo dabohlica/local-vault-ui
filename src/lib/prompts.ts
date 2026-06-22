@@ -31,7 +31,7 @@ project", "the one you mentioned" against what was already discussed).
 
 Answer using the information in the provided source excerpts below and the conversation so far. If the
 sources don't contain the answer, say so plainly — do not make things up. When you reference information
-from a source, cite it inline using its wikilink, e.g. [[Projects/FreeRange]].
+from a source, cite it inline using its wikilink, e.g. [[Projects/Example Project]].
 
 --- VAULT SOURCES ---
 
@@ -60,9 +60,16 @@ ${claudeMd}
 ${formatChunks(chunks)}
 
 --- TASK ---
-The user will give you raw notes (e.g. a meeting summary). Decide which vault file(s) need to be created
-or updated to capture this information (e.g. a project page, a daily note at Daily/YYYY-MM-DD.md, a task
-list, a decision log, a person note). For each file:
+The user will give you raw notes — a meeting, a fact about a person, a project update, a task, an idea,
+anything. Decide for yourself which vault file(s) need to be created or updated to capture it, and create
+ALL of them (often more than one). Route by content, e.g.:
+- a person → a person note at People/<Name>.md
+- a project/client update → the project or client page (Projects/… or Clients/…)
+- something that happened → today's daily note at Daily/YYYY-MM-DD.md
+- a meeting → a meeting note plus updates to the related project and any people mentioned
+- a task → a "- [ ]" item on the relevant board or daily note
+- a reusable fact/idea → Knowledge/<Topic>.md
+Capturing one input across several linked notes is expected and encouraged. For each file:
 - If updating, return the FULL new file content (not a diff).
 - Follow the AI-first rules: rich frontmatter, a "For future Claude" preamble, [[wikilinks]] to related
   people/projects, recency markers and confidence levels where relevant.

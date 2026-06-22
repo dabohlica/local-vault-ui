@@ -10,18 +10,16 @@ import {
   Search,
   BookOpen,
   MessageSquare,
-  Sparkles,
+  FilePlus,
   Settings,
   Moon,
-  FileStack,
 } from 'lucide-react'
 import { cn } from '@/lib/cn'
 
 const NAV_ITEMS = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/add', label: 'Add', icon: FilePlus },
   { href: '/chat', label: 'Chat', icon: MessageSquare },
-  { href: '/curate', label: 'Curate', icon: Sparkles },
-  { href: '/import', label: 'Import', icon: FileStack },
   { href: '/review', label: 'Review', icon: Moon },
   { href: '/commands', label: 'Commands', icon: Terminal },
   { href: '/explorer', label: 'Explorer', icon: FolderOpen },
