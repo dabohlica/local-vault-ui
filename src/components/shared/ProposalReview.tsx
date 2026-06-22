@@ -13,7 +13,7 @@ export type Change = {
   from?: string // move source
   to?: string   // move destination (defaults to path)
 }
-export type ProposalResponse = { changes: Change[]; log_entry: string; summary: string; error?: string; raw?: string }
+export type ProposalResponse = { changes: Change[]; log_entry: string; summary: string; origin?: string; error?: string; raw?: string }
 
 const ACTION_META = {
   create: { icon: FilePlus, color: 'var(--success)' },
@@ -103,6 +103,7 @@ export function ProposalReview({ result, onApplied, onDiscard }: Props) {
         body: JSON.stringify({
           changes: selected.map(({ path, action, content, from, to }) => ({ path, action, content, from, to })),
           log_entry: result.log_entry,
+          origin: result.origin,
         }),
       })
       const data = await res.json() as { written?: string[]; error?: string }

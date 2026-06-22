@@ -2,6 +2,7 @@ import { BriefingCard } from '@/components/dashboard/BriefingCard'
 import { VaultStatsCard } from '@/components/dashboard/VaultStatsCard'
 import { RecentFilesCard } from '@/components/dashboard/RecentFilesCard'
 import { QuickCaptureCard } from '@/components/dashboard/QuickCaptureCard'
+import { ActivityTimelineCard } from '@/components/dashboard/ActivityTimelineCard'
 
 export default function DashboardPage() {
   return (
@@ -26,6 +27,9 @@ export default function DashboardPage() {
 
         {/* Recent Files — 1×2 */}
         <RecentFilesCard />
+
+        {/* Activity Timeline — 2×2: what changed, where, when (traceability) */}
+        <ActivityTimelineCard />
       </div>
     </div>
   )

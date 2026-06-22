@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
             (c.action === 'delete' && c.path)))
 
     result.changes = normalizeChanges(result.changes)
-    return NextResponse.json(result)
+    return NextResponse.json({ ...result, origin: body.id })
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : 'Command failed' },

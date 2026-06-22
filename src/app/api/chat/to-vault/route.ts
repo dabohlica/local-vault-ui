@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Model proposed no note', raw }, { status: 502 })
     }
     result.changes = normalizeChanges(result.changes as Array<{ path: string; action: string; content?: string }>)
-    return NextResponse.json(result)
+    return NextResponse.json({ ...result, origin: 'chat' })
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : 'Failed to capture conversation' },

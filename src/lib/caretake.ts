@@ -3,6 +3,7 @@ import { syncIndex, indexStats, retrieve } from '@/lib/embeddings'
 import { scanVaultHealth, type HealthReport } from '@/lib/health'
 import { buildHealthFixChanges } from '@/lib/healthFix'
 import { appendToLog, listAllNotes, resolveVaultPath } from '@/lib/vault'
+import { recordOperation, type OpChange } from '@/lib/opsLog'
 import { buildCurationPrompt } from '@/lib/prompts'
 import { ollamaChat } from '@/lib/ollama'
 import { savePending } from '@/lib/pending'
@@ -74,17 +75,21 @@ export async function runCaretake(mode: 'sync' | 'full'): Promise<CaretakeResult
 // only ADD frontmatter/preamble and preserve the body). Returns the count written.
 function applyDeterministicHealthFixes(): number {
   const { changes } = buildHealthFixChanges()
-  let applied = 0
+  const done: OpChange[] = []
   for (const change of changes) {
     try {
       fs.writeFileSync(resolveVaultPath(change.path), change.content, 'utf-8')
-      applied++
+      done.push({ action: change.action, path: change.path })
     } catch { /* skip a note we can't write */ }
   }
-  if (applied > 0) {
-    appendToLog(`Auto-fixed structure on ${applied} note(s): ${changes.slice(0, applied).map(c => c.path).join(', ')}`)
+  if (done.length > 0) {
+    recordOperation({
+      origin: 'caretaker',
+      summary: `Auto-fixed structure on ${done.length} note(s) (frontmatter / preamble)`,
+      changes: done,
+    })
   }
-  return applied
+  return done.length
 }
 
 // Ask the local model to propose how to integrate/organize the notes that changed

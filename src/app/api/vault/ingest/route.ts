@@ -18,6 +18,7 @@ type IngestResult = {
   changes: Array<{ path: string; action: 'create' | 'update'; content: string }>
   log_entry: string
   summary: string
+  origin?: string
 }
 
 async function extractText(ext: string, buffer: Buffer): Promise<string | null> {
@@ -59,7 +60,7 @@ function buildProposal(raw: string): NextResponse | IngestResult {
     return NextResponse.json({ error: 'Model proposed no note', raw }, { status: 502 })
   }
   result.changes = normalizeChanges(result.changes)
-  return result
+  return { ...result, origin: 'drop' }
 }
 
 export async function POST(req: NextRequest) {

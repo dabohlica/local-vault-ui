@@ -17,6 +17,7 @@ export async function POST(req: NextRequest) {
     if (stubsProposed) parts.push(`${stubsProposed} stub note(s) to resolve broken links`)
 
     return NextResponse.json({
+      origin: 'interlink',
       changes,
       log_entry: `Interlink — grew the vault graph: ${parts.join(', ') || 'no changes needed'} (scanned ${scanned} notes).`,
       summary: parts.length ? `Proposed ${parts.join(' and ')}.` : 'No new connections found — the graph is already well-linked.',

@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import fs from 'fs'
 import path from 'path'
-import { resolveVaultPath, appendToLog, moveNote, deleteNote } from '@/lib/vault'
+import { resolveVaultPath, moveNote, deleteNote } from '@/lib/vault'
 import { syncIndex } from '@/lib/embeddings'
+import { recordOperation, type OpChange } from '@/lib/opsLog'
 
 type Change = {
   path: string
@@ -17,13 +18,14 @@ type Change = {
 // embedding index is re-synced so retrieval stays correct after files move.
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json() as { changes: Change[]; log_entry?: string }
+    const body = await req.json() as { changes: Change[]; log_entry?: string; origin?: string }
 
     if (!Array.isArray(body.changes) || body.changes.length === 0) {
       return NextResponse.json({ error: 'No changes provided' }, { status: 400 })
     }
 
     const written: string[] = []
+    const applied: OpChange[] = [] // structured record of what actually changed
     const errors: string[] = []
 
     for (const change of body.changes) {
@@ -39,11 +41,13 @@ export async function POST(req: NextRequest) {
               fs.writeFileSync(resolveVaultPath(to), change.content, 'utf-8')
             }
             written.push(`${from} → ${to}`)
+            applied.push({ action: 'move', path: to, from, to })
             break
           }
           case 'delete': {
             deleteNote(change.path)
             written.push(`deleted ${change.path}`)
+            applied.push({ action: 'delete', path: change.path })
             break
           }
           case 'create':
@@ -51,9 +55,11 @@ export async function POST(req: NextRequest) {
           default: {
             if (change.content === undefined) continue
             const absPath = resolveVaultPath(change.path)
+            const existed = fs.existsSync(absPath)
             fs.mkdirSync(path.dirname(absPath), { recursive: true })
             fs.writeFileSync(absPath, change.content, 'utf-8')
             written.push(change.path)
+            applied.push({ action: existed ? 'update' : 'create', path: change.path })
           }
         }
       } catch (e) {
@@ -61,11 +67,12 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    if (body.log_entry || written.length) {
-      appendToLog(
-        `Curated via local AI assistant — affected: ${written.join(', ')}` +
-          (body.log_entry ? `\n\n${body.log_entry}` : '')
-      )
+    if (applied.length) {
+      recordOperation({
+        origin: body.origin ?? 'edit',
+        summary: body.log_entry?.split('\n')[0]?.trim() || `Updated ${applied.length} note(s) via local AI assistant`,
+        changes: applied,
+      })
     }
 
     // Re-sync the index so moved/deleted/created notes are reflected in retrieval.

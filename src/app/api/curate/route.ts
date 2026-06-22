@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
     }
 
     result.changes = normalizeChanges(result.changes)
-    return NextResponse.json(result)
+    return NextResponse.json({ ...result, origin: 'add' })
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : 'Curate failed' },

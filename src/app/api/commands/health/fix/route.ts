@@ -20,6 +20,7 @@ export async function POST(req: NextRequest) {
     if (stubs > 0) parts.push(`${stubs} stub note(s) to resolve broken links`)
 
     return NextResponse.json({
+      origin: 'health',
       changes,
       log_entry: `Vault health auto-fix — ${parts.join(' + ') || 'no changes'} (frontmatter / preamble added, body preserved; stubs created for dangling links).`,
       summary:
