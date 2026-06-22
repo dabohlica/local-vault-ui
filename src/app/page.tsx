@@ -1,6 +1,5 @@
 import { BriefingCard } from '@/components/dashboard/BriefingCard'
 import { VaultStatsCard } from '@/components/dashboard/VaultStatsCard'
-import { RecentFilesCard } from '@/components/dashboard/RecentFilesCard'
 import { QuickCaptureCard } from '@/components/dashboard/QuickCaptureCard'
 import { ActivityTimelineCard } from '@/components/dashboard/ActivityTimelineCard'
 
@@ -25,10 +24,7 @@ export default function DashboardPage() {
         {/* Quick Capture — 1×1 */}
         <QuickCaptureCard />
 
-        {/* Recent Files — right column, spans cols 3–4 (under Stats + Quick Capture) */}
-        <RecentFilesCard />
-
-        {/* Activity Timeline — directly beneath Recent Files, same width (traceability) */}
+        {/* Activity Timeline — right column (cols 3–4), beneath Stats + Quick Capture */}
         <ActivityTimelineCard />
       </div>
     </div>
