@@ -71,7 +71,7 @@ export function ActivityTimelineCard() {
   }
 
   return (
-    <div className="card p-4 flex flex-col bento-right-wide" style={{ maxHeight: '440px' }}>
+    <div className="card p-4 flex flex-col" style={{ maxHeight: '440px' }}>
       <div className="flex items-center gap-2 mb-4">
         <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: 'var(--primary-tint)' }}>
           <History size={14} style={{ color: 'var(--accent)' }} />

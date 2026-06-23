@@ -59,7 +59,7 @@ export function BriefingCard() {
   useEffect(() => { if (active) void loadContent(active) }, [active, loadContent])
 
   return (
-    <div className="card col-span-2 row-span-2 flex flex-col p-5" style={{ minHeight: '320px' }}>
+    <div className="card col-span-2 flex flex-col p-5" style={{ minHeight: '320px' }}>
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: 'var(--primary-tint)' }}>

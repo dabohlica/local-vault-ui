@@ -178,13 +178,6 @@ body {
 @media (max-width: 1200px) { .bento-grid { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 640px) { .bento-grid { grid-template-columns: 1fr; } }
 
-/* Right-column wide cells (Recent Files, Activity Timeline): pinned to the right
-   two columns in the 4-col layout so the timeline sits directly beneath Recent
-   Files; full width once the grid collapses. */
-.bento-right-wide { grid-column: 3 / span 2; }
-@media (max-width: 1200px) { .bento-right-wide { grid-column: span 2; } }
-@media (max-width: 640px) { .bento-right-wide { grid-column: auto; } }
-
 /* Card base — glass-ish, soft shadow per the deck */
 .card {
   background: var(--bg-surface);
