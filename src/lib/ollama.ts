@@ -51,11 +51,14 @@ export async function ollamaChat(opts: {
   return data.message.content
 }
 
-// Describe/OCR an image with the configured vision model. Images are base64
-// (no data: prefix), per Ollama's /api/chat "images" field.
+// Describe/OCR an image with a vision-capable model. Images are base64 (no data:
+// prefix), per Ollama's /api/chat "images" field. `model` lets the caller pick the
+// model — so a multimodal CHAT model (e.g. Gemma 3) can read images directly,
+// without requiring a separate vision model to be installed.
 export async function ollamaVisionChat(opts: {
   prompt: string
   imagesBase64: string[]
+  model?: string
 }): Promise<string> {
   const url = `${OLLAMA_HOST}/api/chat`
   assertLocalHost(url)
@@ -64,9 +67,10 @@ export async function ollamaVisionChat(opts: {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      model: getConfig().visionModel,
+      model: opts.model ?? getConfig().visionModel,
       messages: [{ role: 'user', content: opts.prompt, images: opts.imagesBase64 }],
       stream: false,
+      options: { num_ctx: 8192 },
     }),
   })
 

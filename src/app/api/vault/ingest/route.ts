@@ -5,6 +5,7 @@ import { retrieve } from '@/lib/embeddings'
 import { buildIngestPrompt } from '@/lib/prompts'
 import { ollamaChat, ollamaVisionChat } from '@/lib/ollama'
 import { getVaultPath } from '@/lib/vault'
+import { getConfig } from '@/lib/config'
 import { normalizeChanges } from '@/lib/healthFix'
 import { parseModelJson } from '@/lib/modelJson'
 
@@ -117,21 +118,33 @@ export async function POST(req: NextRequest) {
     const notesField = form.get('notes')
     const userNotes = typeof notesField === 'string' ? notesField : undefined
 
-    // --- Image branch: save to Assets, then have the vision model describe it ---
+    // --- Image branch: save to Assets, then have a vision-capable model describe it ---
     if (IMAGE_EXTS.has(ext)) {
       const assetPath = saveImage(filename, buffer)
-      let description: string
-      try {
-        description = await ollamaVisionChat({
-          prompt: 'Describe this image in detail and transcribe ALL visible text exactly. Be concise but complete.',
-          imagesBase64: [buffer.toString('base64')],
-        })
-      } catch {
-        // Vision model unavailable — keep the saved image, skip the AI note.
+      const b64 = buffer.toString('base64')
+
+      // Try the dedicated vision model first, then fall back to the chat model — so
+      // a multimodal chat model (e.g. Gemma 3) reads the image directly and no
+      // separate vision model needs to be installed. Dedupe + drop empties.
+      const cfg = getConfig()
+      const candidates = Array.from(new Set([cfg.visionModel, cfg.chatModel].filter(Boolean)))
+      let description: string | null = null
+      for (const model of candidates) {
+        try {
+          description = await ollamaVisionChat({
+            prompt: 'Describe this image in detail and transcribe ALL visible text exactly. Be concise but complete.',
+            imagesBase64: [b64],
+            model,
+          })
+          break
+        } catch { /* model missing or not multimodal — try the next candidate */ }
+      }
+      if (description === null) {
+        // No installed model could read the image — keep the saved file, skip the note.
         return NextResponse.json({
           savedOnly: true,
           savedPath: assetPath,
-          summary: `Saved ${assetPath} (vision model unavailable — install it in Settings to auto-summarize images).`,
+          summary: `Saved ${assetPath} (no multimodal model available — set a vision-capable model, or use a multimodal chat model, in Settings).`,
         })
       }
 
