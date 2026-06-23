@@ -51,16 +51,54 @@ function saveImage(filename: string, buffer: Buffer): string {
   return path.relative(getVaultPath(), target)
 }
 
-function buildProposal(raw: string): NextResponse | IngestResult {
-  const result = parseModelJson<IngestResult>(raw)
-  if (!result) {
-    return NextResponse.json({ error: 'Model did not return valid JSON', raw }, { status: 502 })
+// Turn a source (document text, or an image's vision description) into a proposed
+// note. Robust to large/awkward sources: retries with progressively smaller slices
+// so a big PDF yields a note instead of a 502, and returns a friendly 422 if the
+// local model still can't structure it (rather than a raw "invalid JSON"). The
+// retrieval context is computed once; only the source slice shrinks between tries.
+const INGEST_NUM_CTX = 16384
+const CLIP_STEPS = [MAX_CHARS, 5000, 2500]
+
+async function ingestSource(
+  filename: string,
+  fullSourceText: string,
+  assetPath: string | undefined,
+  userNotes: string | undefined,
+): Promise<NextResponse | IngestResult> {
+  const retrievalQuery = `${userNotes ? userNotes + ' ' : ''}${fullSourceText}`.slice(0, 2000)
+  const chunks = await retrieve(retrievalQuery, 6)
+
+  for (const limit of CLIP_STEPS) {
+    // Skip redundant smaller passes when the source is already short.
+    if (limit !== MAX_CHARS && limit >= fullSourceText.length) continue
+    const clipped = fullSourceText.slice(0, limit)
+    const messages = buildIngestPrompt(filename, clipped, chunks, assetPath, userNotes)
+
+    let raw: string
+    try {
+      raw = await ollamaChat({ messages, format: 'json', numCtx: INGEST_NUM_CTX })
+    } catch (err) {
+      // Model/host error (not a parsing issue) — retrying smaller won't help.
+      return NextResponse.json({ error: err instanceof Error ? err.message : 'Ingest failed' }, { status: 502 })
+    }
+
+    const result = parseModelJson<IngestResult>(raw)
+    if (result && Array.isArray(result.changes) && result.changes.length > 0) {
+      result.changes = normalizeChanges(result.changes)
+      return { ...result, origin: 'drop' }
+    }
+    // else: shrink the source and try again
   }
-  if (!Array.isArray(result.changes) || result.changes.length === 0) {
-    return NextResponse.json({ error: 'Model proposed no note', raw }, { status: 502 })
-  }
-  result.changes = normalizeChanges(result.changes)
-  return { ...result, origin: 'drop' }
+
+  return NextResponse.json(
+    {
+      error:
+        'The local model couldn’t structure this document into a note. It may be very large or mostly ' +
+        'non-text (e.g. a scanned PDF with little extractable text). Try a smaller or text-based source, ' +
+        'or drop it and add a short note describing what it is.',
+    },
+    { status: 422 },
+  )
 }
 
 export async function POST(req: NextRequest) {
@@ -98,12 +136,7 @@ export async function POST(req: NextRequest) {
       }
 
       const sourceText = `Image file saved at ${assetPath}.\n\nVisual description and transcribed text:\n${description}`
-      // Bias retrieval toward the user's notes too, so related vault notes surface.
-      const retrievalQuery = `${userNotes ? userNotes + ' ' : ''}${description}`.slice(0, 2000)
-      const chunks = await retrieve(retrievalQuery, 6)
-      const messages = buildIngestPrompt(filename, sourceText, chunks, assetPath, userNotes)
-      const raw = await ollamaChat({ messages, format: 'json' })
-      const out = buildProposal(raw)
+      const out = await ingestSource(filename, sourceText, assetPath, userNotes)
       return out instanceof NextResponse ? out : NextResponse.json(out)
     }
 
@@ -116,12 +149,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Document appears to be empty' }, { status: 400 })
     }
 
-    const clipped = text.slice(0, MAX_CHARS)
-    const retrievalQuery = `${userNotes ? userNotes + ' ' : ''}${clipped}`.slice(0, 2000)
-    const chunks = await retrieve(retrievalQuery, 6)
-    const messages = buildIngestPrompt(filename, clipped, chunks, undefined, userNotes)
-    const raw = await ollamaChat({ messages, format: 'json' })
-    const out = buildProposal(raw)
+    const out = await ingestSource(filename, text, undefined, userNotes)
     return out instanceof NextResponse ? out : NextResponse.json(out)
   } catch (err) {
     return NextResponse.json(
