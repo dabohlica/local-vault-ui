@@ -59,10 +59,22 @@ export async function POST(req: NextRequest) {
         new Map(editChunks.map(c => [c.notePath, { path: c.notePath, heading: c.heading }])).values()
       )
       const messages = buildCurationPrompt(body.question, editChunks, history)
-      const raw = await ollamaChat({ messages, format: 'json' })
+      // Curation is the heaviest prompt we build (_CLAUDE.md + 6 chunks + history +
+      // a long spec) and asks for FULL file contents back as JSON. At the 8192
+      // default, a big _CLAUDE.md or long chat truncates the prompt — dropping the
+      // "return JSON" rule — and leaves no room to finish the reply, so the JSON
+      // comes back unparseable and we 502. Give it a much larger window.
+      const raw = await ollamaChat({ messages, format: 'json', numCtx: 32768 })
       const result = parseModelJson<{ changes?: unknown[]; log_entry?: string; summary?: string }>(raw)
       if (!result) {
-        return NextResponse.json({ error: 'Model did not return valid JSON', raw }, { status: 502 })
+        return NextResponse.json({
+          error:
+            'The model did not return valid JSON. This is usually the prompt overflowing the ' +
+            "model's context window (a large _CLAUDE.md or a long conversation) — the model runs " +
+            'out of room to finish the JSON. Try a shorter request, start a new chat session, or ' +
+            'trim _CLAUDE.md.',
+          raw,
+        }, { status: 502 })
       }
       if (!Array.isArray(result.changes) || result.changes.length === 0) {
         return NextResponse.json({ error: 'The model proposed no changes — try rephrasing the edit.', raw }, { status: 502 })
