@@ -3,6 +3,7 @@ import { retrieve } from '@/lib/embeddings'
 import { buildCurationPrompt } from '@/lib/prompts'
 import { ollamaChat } from '@/lib/ollama'
 import { normalizeChanges } from '@/lib/healthFix'
+import { applyTags } from '@/lib/tags'
 import { reconcileUpdates } from '@/lib/merge'
 import { parseModelJson } from '@/lib/modelJson'
 
@@ -14,13 +15,13 @@ type CurationResult = {
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json() as { text: string }
+    const body = await req.json() as { text: string; tags?: string[] }
     if (!body.text?.trim()) {
       return NextResponse.json({ error: 'Missing text' }, { status: 400 })
     }
 
     const chunks = await retrieve(body.text, 8)
-    const messages = buildCurationPrompt(body.text, chunks)
+    const messages = buildCurationPrompt(body.text, chunks, [], body.tags)
     const raw = await ollamaChat({ messages, format: 'json' })
 
     const result = parseModelJson<CurationResult>(raw)
@@ -38,7 +39,9 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    result.changes = normalizeChanges(await reconcileUpdates(result.changes))
+    // Guarantee the user's chosen tags land on every touched note (code-enforced,
+    // after normalize so frontmatter is present) — independent of the model.
+    result.changes = applyTags(normalizeChanges(await reconcileUpdates(result.changes)), body.tags ?? [])
     return NextResponse.json({ ...result, origin: 'add' })
   } catch (err) {
     return NextResponse.json(

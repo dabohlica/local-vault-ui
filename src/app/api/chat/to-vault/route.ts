@@ -3,6 +3,7 @@ import { retrieve } from '@/lib/embeddings'
 import { buildIngestPrompt } from '@/lib/prompts'
 import { ollamaChat } from '@/lib/ollama'
 import { normalizeChanges } from '@/lib/healthFix'
+import { applyTags } from '@/lib/tags'
 import { reconcileUpdates } from '@/lib/merge'
 import { parseModelJson } from '@/lib/modelJson'
 
@@ -12,7 +13,7 @@ import { parseModelJson } from '@/lib/modelJson'
 // here; the client reviews the diff and applies it via /api/curate/apply.
 export async function POST(req: NextRequest) {
   try {
-    const { transcript, notes } = (await req.json()) as { transcript?: string; notes?: string }
+    const { transcript, notes, tags } = (await req.json()) as { transcript?: string; notes?: string; tags?: string[] }
     if (!transcript?.trim()) {
       return NextResponse.json({ error: 'Empty conversation' }, { status: 400 })
     }
@@ -21,7 +22,7 @@ export async function POST(req: NextRequest) {
     const clipped = transcript.slice(0, 12000)
     const retrievalQuery = `${notes ? notes + ' ' : ''}${clipped}`.slice(0, 2000)
     const chunks = await retrieve(retrievalQuery, 6)
-    const messages = buildIngestPrompt(filename, clipped, chunks, undefined, notes)
+    const messages = buildIngestPrompt(filename, clipped, chunks, undefined, notes, tags)
     const raw = await ollamaChat({ messages, format: 'json' })
 
     const result = parseModelJson<{ changes?: unknown[]; log_entry?: string; summary?: string }>(raw)
@@ -31,7 +32,7 @@ export async function POST(req: NextRequest) {
     if (!Array.isArray(result.changes) || result.changes.length === 0) {
       return NextResponse.json({ error: 'Model proposed no note', raw }, { status: 502 })
     }
-    result.changes = normalizeChanges(await reconcileUpdates(result.changes as Array<{ path: string; action: string; content?: string }>))
+    result.changes = applyTags(normalizeChanges(await reconcileUpdates(result.changes as Array<{ path: string; action: string; content?: string }>)), tags ?? [])
     return NextResponse.json({ ...result, origin: 'chat' })
   } catch (err) {
     return NextResponse.json(

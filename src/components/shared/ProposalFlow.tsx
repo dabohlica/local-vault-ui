@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { Sparkles, Loader2 } from 'lucide-react'
 import { ProposalReview, type ProposalResponse } from '@/components/shared/ProposalReview'
+import { TagPicker } from '@/components/shared/TagPicker'
 
 export type { Change, ProposalResponse } from '@/components/shared/ProposalReview'
 
@@ -14,14 +15,18 @@ type Props = {
   // When set, the textarea is user-resizable (drag the bottom edge) and the chosen
   // height is remembered in this browser under this localStorage key.
   storageKey?: string
-  // Caller supplies how to request a proposal from the given input text.
-  request: (input: string) => Promise<Response>
+  // When set, show a tag picker; the chosen tags are passed to `request` and the
+  // server stamps them onto every note the capture writes.
+  enableTags?: boolean
+  // Caller supplies how to request a proposal from the given input text (+ tags).
+  request: (input: string, tags: string[]) => Promise<Response>
 }
 
 // Input box -> request a proposal -> review/approve/apply (via ProposalReview).
 // Used by the Curate page and by every local command.
-export function ProposalFlow({ inputLabel, inputPlaceholder, submitLabel = 'Propose updates', minHeight = 140, storageKey, request }: Props) {
+export function ProposalFlow({ inputLabel, inputPlaceholder, submitLabel = 'Propose updates', minHeight = 140, storageKey, enableTags, request }: Props) {
   const [text, setText] = useState('')
+  const [tags, setTags] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<ProposalResponse | null>(null)
@@ -48,7 +53,7 @@ export function ProposalFlow({ inputLabel, inputPlaceholder, submitLabel = 'Prop
     setError(null)
     setResult(null)
     try {
-      const res = await request(text)
+      const res = await request(text, tags)
       const data = await res.json() as ProposalResponse
       if (!res.ok) throw new Error(data.error ?? 'Request failed')
       setResult(data)
@@ -71,6 +76,14 @@ export function ProposalFlow({ inputLabel, inputPlaceholder, submitLabel = 'Prop
           className={`${storageKey ? 'resize-y' : 'resize-none'} rounded-lg p-3 text-sm outline-none`}
           style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text)', minHeight: `${minHeight}px`, fontFamily: 'inherit' }}
         />
+        {enableTags && (
+          <div className="flex flex-col gap-1">
+            <TagPicker value={tags} onChange={setTags} />
+            <span className="text-[11px] px-1" style={{ color: 'var(--text-subtle)' }}>
+              Tags are added to the frontmatter of every note this capture creates or updates.
+            </span>
+          </div>
+        )}
         <div className="flex justify-end">
           <button
             onClick={() => void propose()}
@@ -86,7 +99,7 @@ export function ProposalFlow({ inputLabel, inputPlaceholder, submitLabel = 'Prop
       </div>
 
       {result && (
-        <ProposalReview result={result} onApplied={() => { setResult(null); setText('') }} onDiscard={() => setResult(null)} />
+        <ProposalReview result={result} onApplied={() => { setResult(null); setText(''); setTags([]) }} onDiscard={() => setResult(null)} />
       )}
     </div>
   )

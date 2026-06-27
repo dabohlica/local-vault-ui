@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Send, Loader2, MessageSquare, FileText, Trash2, BookmarkPlus, Plus } from 'lucide-react'
 import { ProposalReview, type ProposalResponse } from '@/components/shared/ProposalReview'
+import { TagPicker } from '@/components/shared/TagPicker'
 
 type Citation = { path: string; heading: string }
 type Message = { role: 'user' | 'assistant'; content: string; citations?: Citation[] }
@@ -29,6 +30,7 @@ export default function ChatPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [capturing, setCapturing] = useState(false)
+  const [captureTags, setCaptureTags] = useState<string[]>([])
   const [proposal, setProposal] = useState<ProposalResponse | null>(null)
 
   const loadSessions = useCallback(async () => {
@@ -114,6 +116,7 @@ export default function ChatPage() {
         body: JSON.stringify({
           transcript: buildTranscript(messages),
           notes: 'Saved chat conversation about the vault — capture the key questions, answers, decisions, and facts worth keeping.',
+          tags: captureTags,
         }),
       })
       const data = await res.json() as ProposalResponse
@@ -184,16 +187,21 @@ export default function ChatPage() {
               <p className="text-xs" style={{ color: 'var(--text-subtle)' }}>Ask your vault, or Edit it — all local, every edit reviewed.</p>
             </div>
             {messages.length > 0 && (
-              <button
-                onClick={() => void includeInVault()}
-                disabled={capturing}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all hover:scale-[1.02] disabled:opacity-50"
-                style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}
-                title="Turn this conversation into a vault note via the ingest pipeline"
-              >
-                {capturing ? <Loader2 size={13} className="animate-spin" /> : <BookmarkPlus size={13} />}
-                Save to vault
-              </button>
+              <div className="flex items-center gap-2">
+                <div className="w-56">
+                  <TagPicker value={captureTags} onChange={setCaptureTags} compact />
+                </div>
+                <button
+                  onClick={() => void includeInVault()}
+                  disabled={capturing}
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all hover:scale-[1.02] disabled:opacity-50"
+                  style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}
+                  title="Turn this conversation into a vault note via the ingest pipeline — tagged with the tags on the left"
+                >
+                  {capturing ? <Loader2 size={13} className="animate-spin" /> : <BookmarkPlus size={13} />}
+                  Save to vault
+                </button>
+              </div>
             )}
           </div>
 

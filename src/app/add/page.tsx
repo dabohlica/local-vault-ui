@@ -23,11 +23,12 @@ export default function AddPage() {
         inputLabel="What do you want to add?"
         inputPlaceholder="e.g. Kickoff with Example Company — agreed on the audit scope. Max Mustermann (their CTO) owns the tooling. Next milestone in two weeks."
         storageKey="add-input-height"
-        request={(input) =>
+        enableTags
+        request={(input, tags) =>
           fetch('/api/curate', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text: input }),
+            body: JSON.stringify({ text: input, tags }),
           })
         }
       />

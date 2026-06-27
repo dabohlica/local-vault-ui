@@ -47,7 +47,17 @@ ${formatChunks(chunks)}`
   ]
 }
 
-export function buildCurationPrompt(userText: string, chunks: RetrievedChunk[], history: PriorMessage[] = []) {
+function tagBlock(tags?: string[]): string {
+  const clean = (tags ?? []).map(t => t.replace(/^#+/, '').trim()).filter(Boolean)
+  if (clean.length === 0) return ''
+  return `
+
+--- TAGS TO APPLY ---
+Add these tags to the frontmatter \`tags:\` array of EVERY note you create or update (merge with any
+existing tags, no duplicates): ${clean.map(t => `#${t}`).join(', ')}.`
+}
+
+export function buildCurationPrompt(userText: string, chunks: RetrievedChunk[], history: PriorMessage[] = [], tags?: string[]) {
   const claudeMd = loadClaudeMd()
 
   const system = `You are a local curation assistant for Daniel's Obsidian vault. The vault follows strict
@@ -92,7 +102,7 @@ Respond with ONLY valid JSON in this exact shape, no other text:
   ],
   "log_entry": "one paragraph describing what was curated and why, for the operations log",
   "summary": "one sentence summary for the UI"
-}`
+}${tagBlock(tags)}`
 
   // Recent conversation so requests like "save what we just discussed" or "add that
   // to his note" resolve against the chat.
@@ -111,6 +121,7 @@ export function buildIngestPrompt(
   chunks: RetrievedChunk[],
   assetPath?: string,
   userNotes?: string,
+  tags?: string[],
 ) {
   const claudeMd = loadClaudeMd()
   const today = new Date().toISOString().slice(0, 10)
@@ -162,7 +173,7 @@ Respond with ONLY valid JSON in this exact shape, no other text, no markdown fen
   "changes": [ { "path": "Knowledge/Example.md", "action": "create", "content": "...full note content..." } ],
   "log_entry": "one short paragraph describing what was ingested and why, for the operations log",
   "summary": "one sentence summary for the UI"
-}`
+}${tagBlock(tags)}`
 
   const userContent = notes
     ? `Source document "${filename}":\n\n${sourceText}\n\n--- MY NOTES (HIGH PRIORITY — make sure these land in the summary) ---\n${notes}`
