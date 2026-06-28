@@ -50,10 +50,11 @@ path: Projects/Duplicate.md
 @@@END
 
 Rules:
-- Every marker line starts with @@@ and has nothing else on it.
-- For "create"/"update": include a "path:" line and a @@@CONTENT block with the FULL file content.
-- For "move": include "from:" and "to:" lines (a @@@CONTENT block is optional, to also rewrite it).
-- For "delete": include just a "path:" line.
+- Every marker line (@@@SUMMARY, @@@CHANGE, …) is on its OWN line with nothing else on it.
+- Put "action:", "path:", "from:", "to:" each on their OWN separate line.
+- For "create"/"update": include an "action:" line, a "path:" line, then a @@@CONTENT block with the FULL file content.
+- For "move": include "action:", "from:" and "to:" lines (a @@@CONTENT block is optional, to also rewrite it).
+- For "delete": include "action:" and "path:" lines.
 - You may emit several @@@CHANGE blocks. Put @@@END after the last one.
 - Never write "@@@" anywhere inside file content.`
 
@@ -74,21 +75,54 @@ fences, any characters, multiple lines, no escaping needed...
 @@@END
 
 Rules:
-- Every marker line starts with @@@ and has nothing else on it.
-- Emit exactly ONE @@@CHANGE with action: create, a "path:" line, and a @@@CONTENT block.
+- Every marker line is on its OWN line with nothing else on it.
+- Put "action:" and "path:" each on their OWN separate line.
+- Emit exactly ONE @@@CHANGE with "action: create", a "path:" line, and a @@@CONTENT block.
 - Never write "@@@" anywhere inside the note content.`
 
-const SENTINEL = /^\s*@@@(SUMMARY|LOG|CHANGE|CONTENT|END)\s*$/i
-const HEADER = /^\s*(action|path|from|to)\s*:\s*(.*)$/i
+// A marker line: "@@@CHANGE", tolerating leading markdown decoration (#, *, -, >,
+// backticks), whitespace, and a trailing colon. Small models love to dress markers up.
+const SENTINEL = /^[\s>*#`_-]*@@@\s*(SUMMARY|LOG|CHANGE|CONTENT|END)\b[:\s]*$/i
+// Header keys inside a @@@CHANGE block. Used both to find them and to split a line
+// that crams several onto one (e.g. "action: create path: People/Test.md").
+const HEADER_KEYS = /\b(action|path|from|to)\s*:/gi
+
+// Pull every "key: value" pair out of one header line. Values run until the next
+// known key or end of line, so file paths with spaces survive ("People/John Doe.md").
+function parseHeaderLine(line: string, cur: ProposalChange): boolean {
+  HEADER_KEYS.lastIndex = 0
+  const hits: { key: string; valStart: number; keyStart: number }[] = []
+  let m: RegExpExecArray | null
+  while ((m = HEADER_KEYS.exec(line))) {
+    hits.push({ key: m[1].toLowerCase(), keyStart: m.index, valStart: m.index + m[0].length })
+  }
+  if (hits.length === 0) return false
+  for (let i = 0; i < hits.length; i++) {
+    const end = i + 1 < hits.length ? hits[i + 1].keyStart : line.length
+    const val = line.slice(hits[i].valStart, end).trim()
+    switch (hits[i].key) {
+      case 'action': cur.action = val.toLowerCase() as ProposalChange['action']; break
+      case 'path': cur.path = val; break
+      case 'from': cur.from = val; break
+      case 'to': cur.to = val; break
+    }
+  }
+  return true
+}
+
+const VALID_ACTIONS = new Set(['create', 'update', 'move', 'delete'])
 
 // Parse the @@@ block format into the proposal contract. Falls back to JSON
 // parsing when no @@@ markers are present, so a model that still emits JSON (or an
 // older prompt) keeps working. Returns null only when nothing usable was found.
 export function parseStructuredOutput<T = ProposalResult>(raw: string): T | null {
   if (!raw) return null
-  const lines = raw.split(/\r?\n/)
+  // Reasoning models sometimes inline their scratchpad as <think>…</think> before
+  // the answer — strip it so markers inside it can't confuse the parse.
+  const cleaned = raw.replace(/<think>[\s\S]*?<\/think>/gi, '')
+  const lines = cleaned.split(/\r?\n/)
   if (!lines.some(l => SENTINEL.test(l))) {
-    return parseModelJson<T>(raw)
+    return parseModelJson<T>(cleaned)
   }
 
   const result: ProposalResult = { changes: [], log_entry: '', summary: '' }
@@ -105,7 +139,14 @@ export function parseStructuredOutput<T = ProposalResult>(raw: string): T | null
     buf = []
   }
   const pushChange = () => {
-    if (cur && cur.action) result.changes.push(cur)
+    // Keep a change only if it carries something actionable. Normalize a bogus
+    // action (e.g. the model glued extra text onto it) to a sensible default.
+    if (cur) {
+      if (!VALID_ACTIONS.has(cur.action)) {
+        cur.action = cur.from && cur.to ? 'move' : 'create'
+      }
+      if (cur.path || (cur.from && cur.to) || cur.content) result.changes.push(cur)
+    }
     cur = null
   }
 
@@ -123,15 +164,10 @@ export function parseStructuredOutput<T = ProposalResult>(raw: string): T | null
       continue
     }
     if (section === 'header' && cur) {
-      const h = HEADER.exec(line)
-      if (!h) continue
-      const val = h[2].trim()
-      switch (h[1].toLowerCase()) {
-        case 'action': cur.action = val.toLowerCase() as ProposalChange['action']; break
-        case 'path': cur.path = val; break
-        case 'from': cur.from = val; break
-        case 'to': cur.to = val; break
-      }
+      if (parseHeaderLine(line, cur)) continue
+      // A non-blank, non-header line inside a CHANGE block means the model skipped
+      // the @@@CONTENT marker and started writing the note — treat it as content.
+      if (line.trim()) { section = 'content'; buf.push(line) }
     } else if (section === 'content' || section === 'summary' || section === 'log') {
       buf.push(line)
     }
