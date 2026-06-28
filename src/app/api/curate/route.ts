@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { retrieve } from '@/lib/embeddings'
 import { buildCurationPrompt } from '@/lib/prompts'
-import { ollamaChat } from '@/lib/ollama'
+import { ollamaChatStructured } from '@/lib/ollama'
 import { normalizeChanges } from '@/lib/healthFix'
 import { applyTags } from '@/lib/tags'
 import { reconcileUpdates } from '@/lib/merge'
-import { parseModelJson } from '@/lib/modelJson'
 
 type CurationResult = {
   changes: Array<{ path: string; action: 'create' | 'update' | 'move' | 'delete'; content?: string; from?: string; to?: string }>
@@ -22,12 +21,11 @@ export async function POST(req: NextRequest) {
 
     const chunks = await retrieve(body.text, 8)
     const messages = buildCurationPrompt(body.text, chunks, [], body.tags)
-    const raw = await ollamaChat({ messages, format: 'json', role: 'librarian' })
+    const { result, raw } = await ollamaChatStructured<CurationResult>({ messages, role: 'librarian' })
 
-    const result = parseModelJson<CurationResult>(raw)
     if (!result) {
       return NextResponse.json(
-        { error: 'Model did not return valid JSON', raw },
+        { error: 'The model returned an incomplete or unreadable proposal', raw },
         { status: 502 }
       )
     }

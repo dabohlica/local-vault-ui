@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { retrieve, retrieveNotes, indexStats, syncIndex } from '@/lib/embeddings'
 import { buildRagPrompt, buildCurationPrompt } from '@/lib/prompts'
 import { normalizeChanges } from '@/lib/healthFix'
-import { parseModelJson } from '@/lib/modelJson'
-import { ollamaChat } from '@/lib/ollama'
+import { ollamaChat, ollamaChatStructured } from '@/lib/ollama'
 import { getConfig } from '@/lib/config'
 import { appendToSession, getSession } from '@/lib/chatHistory'
 
@@ -60,19 +59,18 @@ export async function POST(req: NextRequest) {
       )
       const messages = buildCurationPrompt(body.question, editChunks, history)
       // Curation is the heaviest prompt we build (_CLAUDE.md + 6 chunks + history +
-      // a long spec) and asks for FULL file contents back as JSON. If the window is
-      // too small the prompt truncates — dropping the "return JSON" rule — leaving no
-      // room to finish the reply, so the JSON comes back unparseable and we 502. Uses
-      // the config window (chatNumCtx), tunable per machine + model.
+      // a long spec) and asks for FULL file contents back. If the context window is
+      // too small the prompt truncates — and the model runs out of room to finish the
+      // reply, so the proposal comes back incomplete. Uses the config window
+      // (chatNumCtx), tunable per machine + model.
       // Edit mode produces a structured change-proposal — librarian work.
-      const raw = await ollamaChat({ messages, format: 'json', role: 'librarian' })
-      const result = parseModelJson<{ changes?: unknown[]; log_entry?: string; summary?: string }>(raw)
+      const { result, raw } = await ollamaChatStructured<{ changes?: unknown[]; log_entry?: string; summary?: string }>({ messages, role: 'librarian' })
       if (!result) {
         return NextResponse.json({
           error:
-            'The model did not return valid JSON. This is usually the prompt overflowing the ' +
+            'The model returned an incomplete proposal. This is usually the prompt overflowing the ' +
             "model's context window (a large _CLAUDE.md or a long conversation) — the model runs " +
-            'out of room to finish the JSON. Try a shorter request, start a new chat session, or ' +
+            'out of room to finish the reply. Try a shorter request, start a new chat session, or ' +
             'trim _CLAUDE.md.',
           raw,
         }, { status: 502 })

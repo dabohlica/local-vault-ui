@@ -3,13 +3,12 @@ import fs from 'fs'
 import path from 'path'
 import { retrieve } from '@/lib/embeddings'
 import { buildIngestPrompt } from '@/lib/prompts'
-import { ollamaChat, ollamaVisionChat } from '@/lib/ollama'
+import { ollamaVisionChat, ollamaChatStructured } from '@/lib/ollama'
 import { getVaultPath } from '@/lib/vault'
 import { getConfig } from '@/lib/config'
 import { normalizeChanges } from '@/lib/healthFix'
 import { applyTags } from '@/lib/tags'
 import { reconcileUpdates } from '@/lib/merge'
-import { parseModelJson } from '@/lib/modelJson'
 
 export const dynamic = 'force-dynamic'
 
@@ -78,15 +77,16 @@ async function ingestSource(
     const clipped = fullSourceText.slice(0, limit)
     const messages = buildIngestPrompt(filename, clipped, chunks, assetPath, userNotes, tags)
 
-    let raw: string
+    let result: IngestResult | null
     try {
-      raw = await ollamaChat({ messages, format: 'json', numCtx: INGEST_NUM_CTX, role: 'librarian' })
+      // attempts:1 — this loop already retries by shrinking the source, so don't
+      // double-retry at the same size; just take one shot per slice.
+      ;({ result } = await ollamaChatStructured<IngestResult>({ messages, numCtx: INGEST_NUM_CTX, role: 'librarian', attempts: 1 }))
     } catch (err) {
       // Model/host error (not a parsing issue) — retrying smaller won't help.
       return NextResponse.json({ error: err instanceof Error ? err.message : 'Ingest failed' }, { status: 502 })
     }
 
-    const result = parseModelJson<IngestResult>(raw)
     if (result && Array.isArray(result.changes) && result.changes.length > 0) {
       // Guarantee the user's chosen tags land on the note (code-enforced).
       result.changes = applyTags(normalizeChanges(await reconcileUpdates(result.changes)), tags)

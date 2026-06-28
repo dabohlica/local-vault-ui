@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Send, Loader2, MessageSquare, FileText, Trash2, BookmarkPlus, Plus } from 'lucide-react'
 import { ProposalReview, type ProposalResponse } from '@/components/shared/ProposalReview'
 import { TagPicker } from '@/components/shared/TagPicker'
+import { fetchWithRetry } from '@/lib/fetchRetry'
 
 type Citation = { path: string; heading: string }
 type Message = { role: 'user' | 'assistant'; content: string; citations?: Citation[] }
@@ -81,7 +82,7 @@ export default function ChatPage() {
     setProposal(null)
 
     try {
-      const res = await fetch('/api/chat', {
+      const res = await fetchWithRetry('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ question, mode: 'ask', sessionId }),
@@ -110,7 +111,7 @@ export default function ChatPage() {
     if (capturing || messages.length === 0) return
     setCapturing(true); setError(null); setProposal(null)
     try {
-      const res = await fetch('/api/chat/to-vault', {
+      const res = await fetchWithRetry('/api/chat/to-vault', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

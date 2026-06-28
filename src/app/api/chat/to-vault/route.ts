@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { retrieve } from '@/lib/embeddings'
 import { buildIngestPrompt } from '@/lib/prompts'
-import { ollamaChat } from '@/lib/ollama'
+import { ollamaChatStructured } from '@/lib/ollama'
 import { normalizeChanges } from '@/lib/healthFix'
 import { applyTags } from '@/lib/tags'
 import { reconcileUpdates } from '@/lib/merge'
-import { parseModelJson } from '@/lib/modelJson'
 
 // "Include conversation in the vault" — runs the current chat transcript through
 // the SAME ingest pipeline a dropped document uses (retrieve context → draft a
@@ -23,11 +22,10 @@ export async function POST(req: NextRequest) {
     const retrievalQuery = `${notes ? notes + ' ' : ''}${clipped}`.slice(0, 2000)
     const chunks = await retrieve(retrievalQuery, 6)
     const messages = buildIngestPrompt(filename, clipped, chunks, undefined, notes, tags)
-    const raw = await ollamaChat({ messages, format: 'json', role: 'librarian' })
+    const { result, raw } = await ollamaChatStructured<{ changes?: unknown[]; log_entry?: string; summary?: string }>({ messages, role: 'librarian' })
 
-    const result = parseModelJson<{ changes?: unknown[]; log_entry?: string; summary?: string }>(raw)
     if (!result) {
-      return NextResponse.json({ error: 'Model did not return valid JSON', raw }, { status: 502 })
+      return NextResponse.json({ error: 'The model returned an incomplete or unreadable proposal', raw }, { status: 502 })
     }
     if (!Array.isArray(result.changes) || result.changes.length === 0) {
       return NextResponse.json({ error: 'Model proposed no note', raw }, { status: 502 })

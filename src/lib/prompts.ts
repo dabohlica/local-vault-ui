@@ -4,6 +4,7 @@ import { getVaultPath } from '@/lib/vault'
 import type { RetrievedChunk } from '@/lib/embeddings'
 import type { LocalCommand } from '@/lib/commands'
 import { CONTRACT_INSTRUCTIONS } from '@/lib/commands'
+import { STRUCTURED_OUTPUT_SPEC, STRUCTURED_OUTPUT_SPEC_SINGLE } from '@/lib/structuredOutput'
 
 // _CLAUDE.md encodes the vault's "AI-first" conventions. Read fresh each call —
 // it's tiny, and this keeps the prompt correct when the user switches vaults.
@@ -93,16 +94,7 @@ rewrite it) and "delete" (remove a clear duplicate or obsolete note). To move IN
 to note B, update B with the merged content and update (or delete) A. Every change is reviewed as a
 diff before anything is written, so propose reorganizations freely.
 
-Respond with ONLY valid JSON in this exact shape, no other text:
-{
-  "changes": [
-    { "path": "Projects/Example.md", "action": "update", "content": "...full file content..." },
-    { "action": "move", "from": "Inbox/Stray.md", "to": "Projects/Stray.md" },
-    { "action": "delete", "path": "Projects/Duplicate.md" }
-  ],
-  "log_entry": "one paragraph describing what was curated and why, for the operations log",
-  "summary": "one sentence summary for the UI"
-}${tagBlock(tags)}`
+${STRUCTURED_OUTPUT_SPEC}${tagBlock(tags)}`
 
   // Recent conversation so requests like "save what we just discussed" or "add that
   // to his note" resolve against the chat.
@@ -168,12 +160,7 @@ The note MUST contain, in order:
    that appear in the related notes above.${embedLine}
 Summarize and structure — do not copy the whole document verbatim. Base it on the provided source text${notes ? " and, above all, the user's notes" : ''}.
 
-Respond with ONLY valid JSON in this exact shape, no other text, no markdown fences:
-{
-  "changes": [ { "path": "Knowledge/Example.md", "action": "create", "content": "...full note content..." } ],
-  "log_entry": "one short paragraph describing what was ingested and why, for the operations log",
-  "summary": "one sentence summary for the UI"
-}${tagBlock(tags)}`
+${STRUCTURED_OUTPUT_SPEC_SINGLE}${tagBlock(tags)}`
 
   const userContent = notes
     ? `Source document "${filename}":\n\n${sourceText}\n\n--- MY NOTES (HIGH PRIORITY — make sure these land in the summary) ---\n${notes}`

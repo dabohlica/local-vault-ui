@@ -3,7 +3,7 @@ import path from 'path'
 import { extractDocs, type ExtractedDoc } from '@/lib/extract'
 import { retrieve } from '@/lib/embeddings'
 import { buildIngestPrompt } from '@/lib/prompts'
-import { ollamaChat } from '@/lib/ollama'
+import { ollamaChatStructured } from '@/lib/ollama'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
@@ -49,8 +49,8 @@ export async function POST(req: NextRequest) {
       try {
         const chunks = await retrieve(clipped.slice(0, 2000), 5)
         const messages = buildIngestPrompt(pseudoName, clipped, chunks)
-        const raw = await ollamaChat({ messages, format: 'json', role: 'librarian' })
-        const parsed = JSON.parse(raw) as { changes?: Change[] }
+        const { result: parsed } = await ollamaChatStructured<{ changes?: Change[] }>({ messages, role: 'librarian' })
+        if (!parsed) { failed.push(unit.filename); continue }
         for (const c of parsed.changes ?? []) {
           if (!c?.path || c.content === undefined) continue
           // De-dupe target paths within the batch so notes don't clobber each other.

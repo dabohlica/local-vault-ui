@@ -5,7 +5,7 @@ import { buildHealthFixChanges } from '@/lib/healthFix'
 import { appendToLog, listAllNotes, resolveVaultPath } from '@/lib/vault'
 import { recordOperation, type OpChange } from '@/lib/opsLog'
 import { buildCurationPrompt } from '@/lib/prompts'
-import { ollamaChat } from '@/lib/ollama'
+import { ollamaChatStructured } from '@/lib/ollama'
 import { savePending } from '@/lib/pending'
 
 // Shared caretaking routine, run both on-demand and by the in-app scheduler.
@@ -111,11 +111,9 @@ async function queueNightlyCuration(): Promise<number> {
 
   const chunks = await retrieve(recent.join(' '), 12)
   const messages = buildCurationPrompt(userText, chunks)
-  const raw = await ollamaChat({ messages, format: 'json', role: 'librarian' })
+  const { result } = await ollamaChatStructured<{ changes?: unknown[]; log_entry?: string; summary?: string }>({ messages, role: 'librarian' })
 
-  let result: { changes?: unknown[]; log_entry?: string; summary?: string }
-  try { result = JSON.parse(raw) } catch { return 0 }
-  if (!Array.isArray(result.changes) || result.changes.length === 0) return 0
+  if (!result || !Array.isArray(result.changes) || result.changes.length === 0) return 0
 
   savePending({
     origin: 'nightly-curation',

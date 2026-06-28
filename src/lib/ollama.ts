@@ -3,8 +3,15 @@
 // (default http://localhost:11434). No vault data is sent anywhere else.
 
 import { getConfig } from '@/lib/config'
+import { parseStructuredOutput } from '@/lib/structuredOutput'
 
 export const OLLAMA_HOST = process.env.OLLAMA_HOST ?? 'http://localhost:11434'
+
+// Keep the model resident between requests so back-to-back calls don't pay a cold
+// model-load each time. Cold loads (and swapping between the chat and embed models)
+// are the main reason a request runs long enough for the browser to drop it with a
+// bare "Failed to fetch". Overridable via OLLAMA_KEEP_ALIVE (e.g. "0" to disable).
+const KEEP_ALIVE = process.env.OLLAMA_KEEP_ALIVE ?? '30m'
 
 function assertLocalHost(url: string) {
   const { hostname } = new URL(url)
@@ -49,6 +56,7 @@ export async function ollamaChat(opts: {
       model,
       messages: opts.messages,
       stream: false,
+      keep_alive: KEEP_ALIVE,
       ...(opts.format ? { format: opts.format } : {}),
       options: { num_ctx: opts.numCtx ?? getConfig().chatNumCtx },
     }),
@@ -60,6 +68,49 @@ export async function ollamaChat(opts: {
 
   const data = await res.json() as { message: { content: string } }
   return data.message.content
+}
+
+// Structured chat with retry. The prompt asks the model for the @@@ block format
+// (see structuredOutput.ts) instead of JSON, so the model only has to write the
+// note "parts" — the JSON punctuation is assembled in code. This removes the whole
+// class of "Model did not return valid JSON" failures from mismatched quotes/braces
+// in long note bodies. We still retry: if a reply has no usable blocks (empty/cut
+// off), a plain re-ask usually succeeds. NOT format:'json' — that would force JSON
+// and defeat the point. parseStructuredOutput also falls back to JSON, so a model
+// that ignores the format and emits JSON anyway still works. Returns the parsed
+// object plus the last raw reply, or { result: null } if every attempt failed.
+export async function ollamaChatStructured<T = unknown>(opts: {
+  messages: ChatMessage[]
+  numCtx?: number
+  role?: 'writer' | 'librarian'
+  // Total attempts (default 3). The first uses the prompt as-is; later attempts
+  // append a terse corrective instruction.
+  attempts?: number
+}): Promise<{ result: T | null; raw: string }> {
+  const attempts = opts.attempts ?? 3
+  let raw = ''
+  for (let i = 0; i < attempts; i++) {
+    const messages = i === 0 ? opts.messages : [
+      ...opts.messages,
+      {
+        role: 'system' as const,
+        content:
+          'Your previous reply was incomplete or did not use the block format. Re-send it using the ' +
+          'exact @@@SUMMARY / @@@LOG / @@@CHANGE / @@@CONTENT / @@@END markers, each on its own line. ' +
+          'Do not truncate — finish every @@@CONTENT block and end with @@@END.',
+      },
+    ]
+    try {
+      raw = await ollamaChat({ messages, numCtx: opts.numCtx, role: opts.role })
+    } catch (err) {
+      // Transient call failure (model loading, server busy) — retry if attempts remain.
+      if (i === attempts - 1) throw err
+      continue
+    }
+    const result = parseStructuredOutput<T>(raw)
+    if (result) return { result, raw }
+  }
+  return { result: null, raw }
 }
 
 // Describe/OCR an image with a vision-capable model. Images are base64 (no data:
@@ -81,6 +132,7 @@ export async function ollamaVisionChat(opts: {
       model: opts.model ?? getConfig().visionModel,
       messages: [{ role: 'user', content: opts.prompt, images: opts.imagesBase64 }],
       stream: false,
+      keep_alive: KEEP_ALIVE,
       options: { num_ctx: 8192 },
     }),
   })

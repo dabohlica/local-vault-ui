@@ -4,6 +4,8 @@
 // reviews as diffs before anything is written. No command in this app touches a
 // cloud API — vault data never leaves the device.
 
+import { STRUCTURED_OUTPUT_SPEC } from '@/lib/structuredOutput'
+
 export type CommandMode = 'local-model' | 'local-deterministic' | 'local-proposal'
 
 export type LocalCommand = {
@@ -22,16 +24,7 @@ export type LocalCommand = {
 }
 
 export const CONTRACT_INSTRUCTIONS = `
-Respond with ONLY valid JSON in this exact shape, no other text, no markdown fences:
-{
-  "changes": [
-    { "path": "Folder/Note.md", "action": "create" | "update", "content": "...FULL file content..." },
-    { "action": "move", "from": "Old/Path.md", "to": "New/Path.md" },
-    { "action": "delete", "path": "Folder/Obsolete.md" }
-  ],
-  "log_entry": "one short paragraph describing what was done and why, for the operations log",
-  "summary": "one sentence summary for the UI"
-}
+${STRUCTURED_OUTPUT_SPEC}
 As the vault's caretaker you may also reorganize it, not just write notes:
 - "move" renames or relocates a note (e.g. file a stray note into the right folder, rename to match
   conventions). Optionally include "content" to also rewrite it during the move.

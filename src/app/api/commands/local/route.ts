@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { retrieve } from '@/lib/embeddings'
 import { buildCommandPrompt } from '@/lib/prompts'
-import { ollamaChat } from '@/lib/ollama'
+import { ollamaChatStructured } from '@/lib/ollama'
 import { getLocalCommand } from '@/lib/commands'
 import { normalizeChanges } from '@/lib/healthFix'
 import { reconcileUpdates } from '@/lib/merge'
-import { parseModelJson } from '@/lib/modelJson'
 
 type CommandResult = {
   changes: Array<{ path: string; action: 'create' | 'update' | 'move' | 'delete'; content?: string; from?: string; to?: string }>
@@ -29,11 +28,10 @@ export async function POST(req: NextRequest) {
       : []
 
     const messages = buildCommandPrompt(command, body.input, chunks)
-    const raw = await ollamaChat({ messages, format: 'json', role: 'librarian' })
+    const { result, raw } = await ollamaChatStructured<CommandResult>({ messages, role: 'librarian' })
 
-    const result = parseModelJson<CommandResult>(raw)
     if (!result) {
-      return NextResponse.json({ error: 'Model did not return valid JSON', raw }, { status: 502 })
+      return NextResponse.json({ error: 'The model returned an incomplete or unreadable proposal', raw }, { status: 502 })
     }
     if (!Array.isArray(result.changes)) {
       return NextResponse.json({ error: 'Model response missing "changes" array', raw }, { status: 502 })
