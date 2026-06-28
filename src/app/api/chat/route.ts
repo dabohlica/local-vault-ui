@@ -6,6 +6,9 @@ import { ollamaChat, ollamaChatStructured } from '@/lib/ollama'
 import { getConfig } from '@/lib/config'
 import { appendToSession, getSession } from '@/lib/chatHistory'
 
+// A cold model load can take minutes; don't let the platform abort the request.
+export const maxDuration = 300
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json() as { question: string; mode?: 'ask' | 'edit'; sessionId?: string }

@@ -6,6 +6,9 @@ import { getLocalCommand } from '@/lib/commands'
 import { normalizeChanges } from '@/lib/healthFix'
 import { reconcileUpdates } from '@/lib/merge'
 
+// A cold model load can take minutes; don't let the platform abort the request.
+export const maxDuration = 300
+
 type CommandResult = {
   changes: Array<{ path: string; action: 'create' | 'update' | 'move' | 'delete'; content?: string; from?: string; to?: string }>
   log_entry: string

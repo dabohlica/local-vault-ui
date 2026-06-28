@@ -40,6 +40,13 @@ export async function ollamaChat(opts: {
   // Both resolve to chatModel unless the user configured a split, so omitting it (or
   // any legacy caller) just uses chatModel — unchanged behavior.
   role?: 'writer' | 'librarian'
+  // Reasoning ("thinking") models emit a long hidden chain-of-thought before the
+  // answer — pure latency that, on a cold/slow machine, runs the request long
+  // enough for the browser to drop it ("NetworkError"/"Failed to fetch"). These
+  // are extraction/curation tasks that don't need it, so we DISABLE thinking by
+  // default. Pass think:true only where reasoning genuinely helps. (Ignored by
+  // non-thinking models.)
+  think?: boolean
 }): Promise<string> {
   const url = `${OLLAMA_HOST}/api/chat`
   assertLocalHost(url)
@@ -57,6 +64,7 @@ export async function ollamaChat(opts: {
       messages: opts.messages,
       stream: false,
       keep_alive: KEEP_ALIVE,
+      think: opts.think ?? false,
       ...(opts.format ? { format: opts.format } : {}),
       options: { num_ctx: opts.numCtx ?? getConfig().chatNumCtx },
     }),
@@ -111,6 +119,26 @@ export async function ollamaChatStructured<T = unknown>(opts: {
     if (result) return { result, raw }
   }
   return { result: null, raw }
+}
+
+// Preload the generative models into memory so the FIRST real request doesn't pay
+// a cold model-load — which for a multi-GB model can take minutes and blow past the
+// browser's connection timeout (the "NetworkError"/"Failed to fetch" the user hits
+// right after opening the app). Sending /api/generate with just a model + keep_alive
+// loads it and returns immediately without generating. Best-effort and fast to fail
+// if Ollama isn't up. Warms the librarian and writer models (deduped).
+export async function ollamaWarm(): Promise<void> {
+  const url = `${OLLAMA_HOST}/api/generate`
+  assertLocalHost(url)
+  const cfg = getConfig()
+  const models = Array.from(new Set([cfg.librarianModel, cfg.writerModel, cfg.chatModel].filter(Boolean)))
+  await Promise.all(models.map(model =>
+    fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model, keep_alive: KEEP_ALIVE }),
+    }).catch(() => { /* Ollama down / model missing — non-fatal */ })
+  ))
 }
 
 // Describe/OCR an image with a vision-capable model. Images are base64 (no data:

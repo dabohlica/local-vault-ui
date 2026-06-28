@@ -7,6 +7,7 @@ import { TopBar } from '@/components/layout/TopBar'
 import { DropZoneOverlay } from '@/components/shared/DropZoneOverlay'
 import { AutoGitSync } from '@/components/layout/AutoGitSync'
 import { AutoCaretake } from '@/components/layout/AutoCaretake'
+import { ModelWarmup } from '@/components/layout/ModelWarmup'
 
 // Decides between the onboarding screen (no chrome) and the full app, and
 // redirects to /setup until a vault is configured.
@@ -43,6 +44,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <>
       {configured && <AutoGitSync />}
       {configured && <AutoCaretake />}
+      {configured && <ModelWarmup />}
       <div className="flex h-screen overflow-hidden">
         <Sidebar />
         <div className="flex flex-col flex-1 overflow-hidden">
