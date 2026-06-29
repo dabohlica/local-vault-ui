@@ -10,6 +10,7 @@ no cloud vector DBs, no telemetry.
 > degrades silently when offline.)
 
 Works on **macOS and Windows**. This one guide covers everything; **pick your path in Step 4.**
+Want it on your phone too? See **[MOBILE.md](MOBILE.md)** (Tailscale/Wi-Fi access + GitHub sync).
 
 ---
 

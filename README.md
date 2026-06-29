@@ -42,6 +42,14 @@ vector databases, external telemetry. The only module that makes outbound HTTP r
 
 > Vault data NEVER leaves the device.
 
+## Use it from your phone
+
+The app runs on your laptop; your phone is just a browser pointed at it (the model stays on the
+laptop). Reach it from anywhere with Tailscale, or over the same Wi-Fi, and sync the vault between
+devices through a private GitHub repo + Obsidian mobile. The top bar's **Git Pull** / **Git Push**
+buttons keep the vault in sync, and the app auto-pulls-then-pushes on load. See
+**[MOBILE.md](MOBILE.md)** for the full walkthrough.
+
 ## Stack
 
 - Next.js (App Router) + TypeScript + Tailwind

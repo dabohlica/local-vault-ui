@@ -20,7 +20,7 @@ export default function DashboardPage() {
         <BriefingCard />
 
         <div className="col-span-2 flex flex-col gap-4">
-          <div className="grid grid-cols-2 gap-4 items-start">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
             <VaultStatsCard />
             <QuickCaptureCard />
           </div>

@@ -27,6 +27,22 @@ export function AutoGitSync() {
         if (out && !/already up to date/i.test(out)) {
           showToast('Vault synced from git', 'success')
         }
+
+        // Push any local edits back up so other devices (a phone running
+        // Obsidian-mobile + Git, say) see them. Only after a clean pull, so we
+        // never push on top of an unreconciled remote. Fail-quiet like the pull.
+        try {
+          const pushRes = await fetch('/api/vault/git-push', { method: 'POST' })
+          const pushData = await pushRes.json() as { stdout?: string; error?: string }
+          if (pushRes.ok) {
+            const pushed = (pushData.stdout ?? '').trim()
+            if (pushed && !/nothing to push/i.test(pushed)) {
+              showToast('Local changes pushed to git', 'success')
+            }
+          }
+        } catch {
+          // No network: silently ignore.
+        }
       } catch {
         // No network: silently ignore. Local-first means this is non-fatal.
       }

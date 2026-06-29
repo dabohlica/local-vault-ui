@@ -16,6 +16,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const isSetup = pathname === '/setup'
   const [configured, setConfigured] = useState<boolean | null>(null)
+  const [mobileNavOpen, setMobileNavOpen] = useState(false)
+
+  // Close the mobile nav drawer whenever the route changes.
+  useEffect(() => { setMobileNavOpen(false) }, [pathname])
 
   useEffect(() => {
     let active = true
@@ -46,10 +50,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {configured && <AutoCaretake />}
       {configured && <ModelWarmup />}
       <div className="flex h-screen overflow-hidden">
-        <Sidebar />
+        <Sidebar mobileOpen={mobileNavOpen} onClose={() => setMobileNavOpen(false)} />
         <div className="flex flex-col flex-1 overflow-hidden">
-          <TopBar />
-          <main className="flex-1 overflow-y-auto p-6">{children}</main>
+          <TopBar onMenuClick={() => setMobileNavOpen(true)} />
+          <main className="flex-1 overflow-y-auto p-4 md:p-6">{children}</main>
         </div>
       </div>
       <DropZoneOverlay />
