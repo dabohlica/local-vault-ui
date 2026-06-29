@@ -20,9 +20,8 @@ function ExplorerContent() {
     <div className="flex h-full gap-0 rounded-2xl overflow-hidden" style={{ border: '1px solid var(--border-subtle)' }}>
       {/* File tree panel */}
       <div
-        className="flex-shrink-0 flex flex-col"
+        className="flex-shrink-0 flex flex-col w-[44%] min-w-[140px] md:w-[260px]"
         style={{
-          width: '260px',
           background: 'var(--bg-surface)',
           borderRight: '1px solid var(--border-subtle)',
         }}

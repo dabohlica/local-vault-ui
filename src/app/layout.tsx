@@ -1,4 +1,4 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import './globals.css'
 import { ToastProvider } from '@/components/shared/Toast'
 import { AppShell } from '@/components/layout/AppShell'
@@ -6,6 +6,14 @@ import { AppShell } from '@/components/layout/AppShell'
 export const metadata: Metadata = {
   title: 'Vault UI — Knowledge Steering',
   description: 'Personal knowledge vault steering interface',
+}
+
+// Render at device width on phones (instead of a zoomed-out desktop), and let
+// the standalone PWA fill the screen edge-to-edge.
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
 }
 
 // Runs before paint to apply the saved theme (light default) without a flash.

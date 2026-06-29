@@ -140,8 +140,8 @@ export default function ChatPage() {
       )}
 
       <div className="flex-1 min-h-0 flex gap-4">
-        {/* Sessions rail */}
-        <aside className="w-60 flex-shrink-0 flex flex-col rounded-2xl overflow-hidden" style={{ border: '1px solid var(--border-subtle)', background: 'var(--bg-surface)' }}>
+        {/* Sessions rail — hidden on phones to give the conversation full width. */}
+        <aside className="hidden md:flex w-60 flex-shrink-0 flex-col rounded-2xl overflow-hidden" style={{ border: '1px solid var(--border-subtle)', background: 'var(--bg-surface)' }}>
           <button
             onClick={newChat}
             className="m-2 flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium transition-all hover:scale-[1.02]"

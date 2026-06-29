@@ -13,6 +13,7 @@ import {
   FilePlus,
   Settings,
   Moon,
+  X,
 } from 'lucide-react'
 import { cn } from '@/lib/cn'
 
@@ -27,7 +28,13 @@ const NAV_ITEMS = [
   { href: '/setup', label: 'Settings', icon: Settings },
 ]
 
-export function Sidebar() {
+export function Sidebar({
+  mobileOpen = false,
+  onClose,
+}: {
+  mobileOpen?: boolean
+  onClose?: () => void
+}) {
   const pathname = usePathname()
   const [vaultLabel, setVaultLabel] = useState('—')
   const [pending, setPending] = useState(0)
@@ -47,13 +54,29 @@ export function Sidebar() {
   }, [pathname])
 
   return (
-    <aside
-      className="flex flex-col w-[240px] flex-shrink-0 h-screen border-r"
-      style={{
-        background: 'var(--bg-surface)',
-        borderColor: 'var(--border-subtle)',
-      }}
-    >
+    <>
+      {/* Backdrop — only on mobile while the drawer is open. */}
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/50 md:hidden"
+          onClick={onClose}
+          aria-hidden
+        />
+      )}
+
+      <aside
+        className={cn(
+          'flex flex-col w-[240px] flex-shrink-0 h-screen border-r',
+          // Mobile: fixed off-canvas drawer that slides in. Desktop (md+): part
+          // of the normal flex flow, always visible.
+          'fixed inset-y-0 left-0 z-50 transition-transform duration-200 md:static md:translate-x-0',
+          mobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0',
+        )}
+        style={{
+          background: 'var(--bg-surface)',
+          borderColor: 'var(--border-subtle)',
+        }}
+      >
       {/* Logo */}
       <div
         className="flex items-center gap-3 px-5 py-5 border-b"
@@ -69,6 +92,15 @@ export function Sidebar() {
           <p className="text-sm font-semibold" style={{ color: 'var(--text)' }}>Vault UI</p>
           <p className="text-xs" style={{ color: 'var(--text-subtle)' }}>Knowledge Steering</p>
         </div>
+        {/* Close button — mobile only. */}
+        <button
+          onClick={onClose}
+          className="ml-auto md:hidden p-1 rounded-lg"
+          style={{ color: 'var(--text-muted)' }}
+          aria-label="Close navigation"
+        >
+          <X size={18} />
+        </button>
       </div>
 
       {/* Navigation */}
@@ -124,6 +156,7 @@ export function Sidebar() {
           {vaultLabel}
         </p>
       </div>
-    </aside>
+      </aside>
+    </>
   )
 }
