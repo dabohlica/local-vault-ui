@@ -116,10 +116,11 @@ export function TopBar({ onMenuClick }: { onMenuClick?: () => void }) {
         {/* Theme toggle */}
         <ThemeToggle />
 
-        {/* Search shortcut */}
+        {/* Search shortcut — hidden on phones (Search is in the nav drawer) to keep
+            the action row from overflowing. */}
         <button
           onClick={() => router.push('/search')}
-          className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-all duration-150 hover:scale-[1.02]"
+          className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-all duration-150 hover:scale-[1.02]"
           style={{
             background: 'var(--bg-elevated)',
             color: 'var(--text-muted)',

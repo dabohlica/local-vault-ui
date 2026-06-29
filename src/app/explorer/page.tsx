@@ -4,6 +4,7 @@ import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { FileTree } from '@/components/explorer/FileTree'
 import { MarkdownPreview } from '@/components/explorer/MarkdownPreview'
+import { cn } from '@/lib/cn'
 
 function ExplorerContent() {
   const searchParams = useSearchParams()
@@ -18,9 +19,13 @@ function ExplorerContent() {
 
   return (
     <div className="flex h-full gap-0 rounded-2xl overflow-hidden" style={{ border: '1px solid var(--border-subtle)' }}>
-      {/* File tree panel */}
+      {/* File tree panel. Master/detail on mobile: full-width tree, hidden once a
+          file is open (the preview takes over). Always a fixed rail on md+. */}
       <div
-        className="flex-shrink-0 flex flex-col w-[44%] min-w-[140px] md:w-[260px]"
+        className={cn(
+          'flex-shrink-0 flex-col w-full md:w-[260px] md:flex',
+          selectedFile ? 'hidden' : 'flex',
+        )}
         style={{
           background: 'var(--bg-surface)',
           borderRight: '1px solid var(--border-subtle)',
@@ -37,9 +42,12 @@ function ExplorerContent() {
         <FileTree selectedPath={selectedFile} onSelect={setSelectedFile} />
       </div>
 
-      {/* Preview panel */}
-      <div className="flex-1 min-w-0" style={{ background: 'var(--bg-base)' }}>
-        <MarkdownPreview filePath={selectedFile} />
+      {/* Preview panel. Hidden on mobile until a file is picked; full-width then. */}
+      <div
+        className={cn('flex-1 min-w-0 md:block', selectedFile ? 'block' : 'hidden')}
+        style={{ background: 'var(--bg-base)' }}
+      >
+        <MarkdownPreview filePath={selectedFile} onBack={() => setSelectedFile(null)} />
       </div>
     </div>
   )
@@ -47,7 +55,7 @@ function ExplorerContent() {
 
 export default function ExplorerPage() {
   return (
-    <div className="flex flex-col h-full" style={{ height: 'calc(100vh - 56px - 48px)' }}>
+    <div className="flex flex-col h-[calc(100vh-56px-32px)] md:h-[calc(100vh-56px-48px)]">
       <div className="mb-4 flex-shrink-0">
         <h1 className="text-xl font-bold gradient-text">Explorer</h1>
         <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>
