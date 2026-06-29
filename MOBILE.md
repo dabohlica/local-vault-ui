@@ -35,7 +35,11 @@ cellular, a café) **without exposing anything to the public internet**.
    npm run build && npm run start:lan
    ```
 
-4. On the phone's browser open **`http://100.x.y.z:3000`**. That's it.
+   On startup it prints a banner listing every reachable URL (Tailscale, Wi-Fi/LAN, local)
+   **plus a scannable QR code** for the best one.
+
+4. **Scan the QR with your phone's camera** — it opens the app directly. (Or type the
+   `http://100.x.y.z:3000` address by hand.) That's it.
 
 The laptop must be **awake and running the app** for the phone to connect — it's the server. Ollama
 stays exactly as-is (the app calls it on the laptop's own localhost); nothing about your AI setup
@@ -52,13 +56,17 @@ only works while the laptop is reachable.)
 
 If you only need phone access while on the **same Wi-Fi** as the laptop:
 
-1. Find the laptop's local IP — macOS: `ipconfig getifaddr en0`; Windows: `ipconfig` → IPv4 Address
-   (looks like `192.168.x.x`).
-2. `npm run dev:lan` (or `npm run start:lan`).
-3. On the phone open **`http://192.168.x.x:3000`**.
+1. `npm run dev:lan` (or `npm run start:lan`). The startup banner prints the `Wi-Fi/LAN` URL and a
+   **QR code** — scan it with your phone's camera to open the app. (To find the IP manually:
+   macOS `ipconfig getifaddr en0`; Windows `ipconfig` → IPv4 Address, then open
+   `http://192.168.x.x:3000`.)
 
 No access when you're away from home, and a firewall prompt may ask you to allow incoming
 connections on port 3000. For anywhere-access, use Tailscale (§1).
+
+> **Which URL the QR uses:** it prefers Tailscale (works anywhere), falling back to your LAN IP.
+> Force a choice with `VAULT_QR=lan` (or `tailscale` / `local`) before the command, e.g.
+> `VAULT_QR=lan npm run dev:lan`. On a non-default port, set `PORT=3001 npm run dev:lan -- -p 3001`.
 
 ---
 
