@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { Code2, ExternalLink, Loader2, FileText } from 'lucide-react'
+import { Code2, ExternalLink, Loader2, FileText, ArrowLeft } from 'lucide-react'
 
 type FrontmatterData = Record<string, string | number | boolean | string[]>
 
@@ -16,9 +16,11 @@ type FileData = {
 
 type Props = {
   filePath: string | null
+  // Mobile master/detail: clears the selection to return to the file tree.
+  onBack?: () => void
 }
 
-export function MarkdownPreview({ filePath }: Props) {
+export function MarkdownPreview({ filePath, onBack }: Props) {
   const [data, setData] = useState<FileData | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -98,18 +100,31 @@ export function MarkdownPreview({ filePath }: Props) {
     <div className="flex flex-col h-full overflow-hidden">
       {/* File header */}
       <div
-        className="flex items-center justify-between px-6 py-3 flex-shrink-0 border-b"
+        className="flex items-center justify-between gap-2 px-4 md:px-6 py-3 flex-shrink-0 border-b"
         style={{ borderColor: 'var(--border-subtle)', background: 'var(--bg-surface)' }}
       >
-        <div>
-          <p className="text-sm font-medium" style={{ color: 'var(--text)' }}>
-            {filePath.split('/').at(-1)?.replace('.md', '')}
-          </p>
-          <p className="text-xs" style={{ color: 'var(--text-subtle)' }}>{filePath}</p>
+        <div className="flex items-center gap-2 min-w-0">
+          {/* Back to the file tree — mobile only. */}
+          {onBack && (
+            <button
+              onClick={onBack}
+              className="md:hidden p-1.5 -ml-1 rounded-lg flex-shrink-0"
+              style={{ color: 'var(--text-muted)' }}
+              aria-label="Back to files"
+            >
+              <ArrowLeft size={18} />
+            </button>
+          )}
+          <div className="min-w-0">
+            <p className="text-sm font-medium truncate" style={{ color: 'var(--text)' }}>
+              {filePath.split('/').at(-1)?.replace('.md', '')}
+            </p>
+            <p className="text-xs truncate" style={{ color: 'var(--text-subtle)' }}>{filePath}</p>
+          </div>
         </div>
         <button
           onClick={() => void openInVSCode()}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-all duration-150 hover:scale-[1.02]"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-all duration-150 hover:scale-[1.02] flex-shrink-0"
           style={{
             background: 'var(--bg-elevated)',
             color: 'var(--text-muted)',
@@ -117,7 +132,7 @@ export function MarkdownPreview({ filePath }: Props) {
           }}
         >
           <Code2 size={12} />
-          Edit in VS Code
+          <span className="hidden sm:inline">Edit in VS Code</span>
           <ExternalLink size={10} />
         </button>
       </div>

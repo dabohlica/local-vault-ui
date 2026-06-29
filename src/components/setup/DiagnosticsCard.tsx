@@ -67,7 +67,7 @@ export function DiagnosticsCard() {
           </div>
 
           {/* Key numbers */}
-          <div className="grid grid-cols-2 gap-2 text-xs">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
             <Stat label="Vault path" value={d.vault.path || '(unset)'} mono ok={d.vault.exists} />
             <Stat label="Notes on disk" value={String(d.vault.notesOnDisk)} />
             <Stat label="Indexed notes" value={`${d.index.indexedNotes} (${d.index.chunks} chunks)`} ok={d.index.chunks > 0} />

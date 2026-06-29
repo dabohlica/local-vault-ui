@@ -116,7 +116,7 @@ body {
 ::-webkit-scrollbar-thumb:hover { background: var(--text-subtle); }
 
 /* Markdown prose styles */
-.markdown-body { color: var(--text); line-height: 1.7; font-size: 0.925rem; }
+.markdown-body { color: var(--text); line-height: 1.7; font-size: 0.925rem; overflow-wrap: anywhere; }
 
 .markdown-body h1 {
   font-size: 1.75rem; font-weight: 700; color: var(--text);
@@ -155,7 +155,7 @@ body {
   border-radius: 10px; padding: 1rem 1.25rem; overflow-x: auto; margin-bottom: 1rem;
 }
 .markdown-body pre code { background: transparent; padding: 0; color: var(--text); font-size: 0.85rem; }
-.markdown-body table { border-collapse: collapse; width: 100%; margin-bottom: 1rem; font-size: 0.875rem; }
+.markdown-body table { border-collapse: collapse; width: 100%; margin-bottom: 1rem; font-size: 0.875rem; display: block; overflow-x: auto; }
 .markdown-body th {
   background: var(--bg-elevated); color: var(--text); font-weight: 600; text-align: left;
   padding: 0.5rem 0.75rem; border: 1px solid var(--border);

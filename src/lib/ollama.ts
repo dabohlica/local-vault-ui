@@ -78,6 +78,66 @@ export async function ollamaChat(opts: {
   return data.message.content
 }
 
+// Streaming counterpart to ollamaChat: yields the answer as content deltas instead
+// of returning it whole. This is what keeps a phone (or any non-localhost client)
+// connection alive — bytes flow continuously as the model generates, so an idle
+// network hop can't drop the request the way a 30-60s silent POST gets dropped
+// ("Failed to fetch"). Same local-only guarantees and options as ollamaChat.
+export async function* ollamaChatStream(opts: {
+  messages: ChatMessage[]
+  numCtx?: number
+  role?: 'writer' | 'librarian'
+  think?: boolean
+}): AsyncGenerator<string> {
+  const url = `${OLLAMA_HOST}/api/chat`
+  assertLocalHost(url)
+
+  const cfg = getConfig()
+  const model = opts.role === 'writer' ? cfg.writerModel
+    : opts.role === 'librarian' ? cfg.librarianModel
+    : cfg.chatModel
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model,
+      messages: opts.messages,
+      stream: true,
+      keep_alive: KEEP_ALIVE,
+      think: opts.think ?? false,
+      options: { num_ctx: opts.numCtx ?? cfg.chatNumCtx },
+    }),
+  })
+
+  if (!res.ok || !res.body) {
+    throw new Error(`Ollama chat failed: ${res.status} ${res.ok ? 'no response body' : await res.text()}`)
+  }
+
+  // Ollama streams newline-delimited JSON, one object per token-ish chunk:
+  //   {"message":{"role":"assistant","content":"He"},"done":false}\n
+  // ...ending with {"done":true,...}. Buffer partial lines across reads.
+  const reader = res.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    let nl: number
+    while ((nl = buffer.indexOf('\n')) !== -1) {
+      const line = buffer.slice(0, nl).trim()
+      buffer = buffer.slice(nl + 1)
+      if (!line) continue
+      let obj: { message?: { content?: string }; error?: string }
+      try { obj = JSON.parse(line) } catch { continue } // ignore a partial/garbled line
+      if (obj.error) throw new Error(`Ollama chat failed: ${obj.error}`)
+      const delta = obj.message?.content
+      if (delta) yield delta
+    }
+  }
+}
+
 // Structured chat with retry. The prompt asks the model for the @@@ block format
 // (see structuredOutput.ts) instead of JSON, so the model only has to write the
 // note "parts" — the JSON punctuation is assembled in code. This removes the whole

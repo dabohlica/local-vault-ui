@@ -29,6 +29,7 @@ export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
+  const [streaming, setStreaming] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [capturing, setCapturing] = useState(false)
   const [captureTags, setCaptureTags] = useState<string[]>([])
@@ -81,28 +82,79 @@ export default function ChatPage() {
     setError(null)
     setProposal(null)
 
+    // Accumulate the streamed answer outside the state updater so the updater stays
+    // pure (React StrictMode invokes it twice in dev). `started` flips once the first
+    // token lands and the assistant bubble is appended; subsequent tokens replace it.
+    let acc = ''
+    let started = false
+    let citations: Citation[] | undefined
     try {
       const res = await fetchWithRetry('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ question, mode: 'ask', sessionId }),
       })
-      const data = await res.json() as {
-        answer?: string; citations?: Citation[]; error?: string; sessionId?: string
+      // A failure before streaming begins comes back as JSON, not NDJSON.
+      if (!res.ok || !res.body) {
+        let msg = 'Chat failed'
+        try { msg = ((await res.json()) as { error?: string }).error ?? msg } catch { /* non-JSON body */ }
+        throw new Error(msg)
       }
-      if (!res.ok) throw new Error(data.error ?? 'Chat failed')
-      if (data.sessionId) setSessionId(data.sessionId)
 
-      if (data.answer) {
-        setMessages(prev => [...prev, { role: 'assistant', content: data.answer!, citations: data.citations }])
-      } else {
-        throw new Error('Empty response')
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+      let streamErr: string | null = null
+
+      const handle = (evt: { type: string; v?: string; citations?: Citation[]; sessionId?: string; error?: string }) => {
+        if (evt.type === 'meta') {
+          citations = evt.citations
+        } else if (evt.type === 'token') {
+          acc += evt.v ?? ''
+          if (!started) {
+            started = true
+            setStreaming(true) // first token in — swap the "Thinking…" line for the answer
+            setMessages(prev => [...prev, { role: 'assistant', content: acc, citations }])
+          } else {
+            setMessages(prev => {
+              const next = prev.slice()
+              next[next.length - 1] = { role: 'assistant', content: acc, citations }
+              return next
+            })
+          }
+        } else if (evt.type === 'done') {
+          if (evt.sessionId) setSessionId(evt.sessionId)
+        } else if (evt.type === 'error') {
+          streamErr = evt.error ?? 'Chat failed'
+        }
       }
+
+      // Parse the newline-delimited JSON stream, buffering partial lines across reads.
+      for (;;) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        let nl: number
+        while ((nl = buffer.indexOf('\n')) !== -1) {
+          const line = buffer.slice(0, nl).trim()
+          buffer = buffer.slice(nl + 1)
+          if (!line) continue
+          try { handle(JSON.parse(line)) } catch { /* ignore a torn line */ }
+        }
+      }
+
+      if (streamErr) throw new Error(streamErr)
+      if (!started) throw new Error('Empty response')
       void loadSessions() // refresh titles / new session in the rail
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Chat failed')
+      // Self-heal: if nothing streamed in but the server already finished and
+      // persisted the answer, pull it from the session so it shows without a manual
+      // reload. Only when we have a session and rendered no partial answer.
+      if (!started && sessionId) void openSession(sessionId)
     } finally {
       setLoading(false)
+      setStreaming(false)
     }
   }
 
@@ -131,7 +183,7 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="flex flex-col h-full" style={{ height: 'calc(100vh - 56px - 48px)' }}>
+    <div className="flex flex-col h-[calc(100vh-56px-32px)] md:h-[calc(100vh-56px-48px)]">
       {proposal && (
         <div className="mb-4 flex-shrink-0 rounded-2xl p-4 overflow-y-auto" style={{ border: '1px solid var(--border)', background: 'var(--bg-surface)', maxHeight: '50vh' }}>
           <p className="text-sm font-medium mb-3" style={{ color: 'var(--text)' }}>Review proposed changes</p>
@@ -219,9 +271,9 @@ export default function ChatPage() {
             )}
 
             {messages.map((m, i) => (
-              <div key={i} className="flex flex-col gap-2 max-w-2xl" style={{ alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start' }}>
+              <div key={i} className="flex flex-col gap-2 min-w-0 max-w-[90%] sm:max-w-2xl" style={{ alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start' }}>
                 <div
-                  className="px-4 py-2.5 rounded-2xl text-sm whitespace-pre-wrap"
+                  className="px-4 py-2.5 rounded-2xl text-sm whitespace-pre-wrap break-words"
                   style={{
                     background: m.role === 'user' ? 'var(--primary)' : 'var(--bg-elevated)',
                     color: m.role === 'user' ? 'white' : 'var(--text)',
@@ -237,11 +289,11 @@ export default function ChatPage() {
                       <button
                         key={c.path}
                         onClick={() => router.push(`/explorer?file=${encodeURIComponent(c.path)}`)}
-                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs transition-all duration-150 hover:scale-[1.02]"
+                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs transition-all duration-150 hover:scale-[1.02] min-w-0 max-w-full"
                         style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}
                       >
-                        <FileText size={11} style={{ color: 'var(--primary)' }} />
-                        {c.path.replace(/\.md$/, '')}
+                        <FileText size={11} style={{ color: 'var(--primary)', flexShrink: 0 }} />
+                        <span className="truncate">{c.path.replace(/\.md$/, '')}</span>
                       </button>
                     ))}
                   </div>
@@ -249,7 +301,7 @@ export default function ChatPage() {
               </div>
             ))}
 
-            {loading && (
+            {loading && !streaming && (
               <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--text-subtle)' }}>
                 <Loader2 size={14} className="animate-spin" /> Thinking…
               </div>
