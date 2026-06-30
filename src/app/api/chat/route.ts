@@ -16,17 +16,26 @@ export const maxDuration = 300
 // X-Accel-Buffering headers tell any intermediary proxy not to buffer the stream.
 function ndjsonStream(producer: (write: (obj: unknown) => void) => Promise<void>): Response {
   const encoder = new TextEncoder()
+  // If the client disconnects, the stream is cancelled. We let the producer run to
+  // completion anyway (so the answer is still generated and persisted to the session
+  // — reload then shows it), but make `write` a no-op: enqueueing on a cancelled
+  // controller throws, and that throw would otherwise become an unhandled rejection.
+  let cancelled = false
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
-      const write = (obj: unknown) => controller.enqueue(encoder.encode(JSON.stringify(obj) + '\n'))
+      const write = (obj: unknown) => {
+        if (cancelled) return
+        controller.enqueue(encoder.encode(JSON.stringify(obj) + '\n'))
+      }
       try {
         await producer(write)
       } catch (err) {
         write({ type: 'error', error: err instanceof Error ? err.message : 'Chat failed' })
       } finally {
-        controller.close()
+        if (!cancelled) controller.close()
       }
     },
+    cancel() { cancelled = true },
   })
   return new Response(stream, {
     headers: {
