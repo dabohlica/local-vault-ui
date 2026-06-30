@@ -120,21 +120,28 @@ export async function* ollamaChatStream(opts: {
   const reader = res.body.getReader()
   const decoder = new TextDecoder()
   let buffer = ''
-  while (true) {
-    const { done, value } = await reader.read()
-    if (done) break
-    buffer += decoder.decode(value, { stream: true })
-    let nl: number
-    while ((nl = buffer.indexOf('\n')) !== -1) {
-      const line = buffer.slice(0, nl).trim()
-      buffer = buffer.slice(nl + 1)
-      if (!line) continue
-      let obj: { message?: { content?: string }; error?: string }
-      try { obj = JSON.parse(line) } catch { continue } // ignore a partial/garbled line
-      if (obj.error) throw new Error(`Ollama chat failed: ${obj.error}`)
-      const delta = obj.message?.content
-      if (delta) yield delta
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      let nl: number
+      while ((nl = buffer.indexOf('\n')) !== -1) {
+        const line = buffer.slice(0, nl).trim()
+        buffer = buffer.slice(nl + 1)
+        if (!line) continue
+        let obj: { message?: { content?: string }; error?: string }
+        try { obj = JSON.parse(line) } catch { continue } // ignore a partial/garbled line
+        if (obj.error) throw new Error(`Ollama chat failed: ${obj.error}`)
+        const delta = obj.message?.content
+        if (delta) yield delta
+      }
     }
+  } finally {
+    // If the consumer stops early (an error downstream, or the route's client
+    // disconnecting), cancel the upstream read so we don't leak the connection to
+    // Ollama. Harmless once the stream has already completed.
+    await reader.cancel().catch(() => {})
   }
 }
 
