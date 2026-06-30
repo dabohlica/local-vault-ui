@@ -264,13 +264,13 @@ export default function SetupPage() {
             onChange={e => setVaultInput(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter') void saveVault() }}
             placeholder="/Users/you/path/to/vault"
-            className="flex-1 rounded-lg px-3 py-2 text-sm outline-none font-mono"
+            className="flex-1 min-w-0 rounded-lg px-3 py-2 text-sm outline-none font-mono"
             style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text)' }}
           />
           <button
             onClick={() => void saveVault()}
             disabled={savingVault || !vaultInput.trim()}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all hover:scale-[1.02] disabled:opacity-50"
+            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all hover:scale-[1.02] disabled:opacity-50 flex-shrink-0"
             style={{ background: 'linear-gradient(135deg, var(--primary), var(--accent))', color: 'white' }}
           >
             {savingVault ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
@@ -508,7 +508,7 @@ function ModelPicker({ role, label, current, ok, optional, installed, active, pu
         <select
           value={current}
           onChange={e => onSelect(e.target.value)}
-          className="text-sm rounded-lg px-2.5 py-1.5 outline-none font-mono"
+          className="text-sm rounded-lg px-2.5 py-1.5 outline-none font-mono min-w-0 max-w-full"
           style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text)' }}
         >
           {options.map(m => (
@@ -550,13 +550,13 @@ function ModelPicker({ role, label, current, ok, optional, installed, active, pu
           onChange={e => setCustom(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter' && custom.trim()) onPull(custom.trim()) }}
           placeholder="…or type any Ollama model name"
-          className="flex-1 text-xs rounded-lg px-2.5 py-1.5 outline-none font-mono"
+          className="flex-1 min-w-0 text-xs rounded-lg px-2.5 py-1.5 outline-none font-mono"
           style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text)' }}
         />
         <button
           onClick={() => custom.trim() && onPull(custom.trim())}
           disabled={!custom.trim() || !!pulling}
-          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all hover:scale-[1.02] disabled:opacity-50"
+          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all hover:scale-[1.02] disabled:opacity-50 flex-shrink-0"
           style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}
         >
           <Download size={11} /> Pull
