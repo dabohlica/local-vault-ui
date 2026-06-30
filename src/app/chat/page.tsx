@@ -233,21 +233,23 @@ export default function ChatPage() {
         </aside>
 
         {/* Chat column */}
-        <div className="flex-1 min-h-0 flex flex-col rounded-2xl overflow-hidden" style={{ border: '1px solid var(--border-subtle)', background: 'var(--bg-surface)' }}>
-          <div className="flex items-center justify-between px-5 py-3 border-b flex-shrink-0" style={{ borderColor: 'var(--border-subtle)' }}>
-            <div>
+        <div className="flex-1 min-w-0 min-h-0 flex flex-col rounded-2xl overflow-hidden" style={{ border: '1px solid var(--border-subtle)', background: 'var(--bg-surface)' }}>
+          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between px-4 md:px-5 py-3 border-b flex-shrink-0" style={{ borderColor: 'var(--border-subtle)' }}>
+            <div className="min-w-0">
               <h1 className="text-sm font-semibold" style={{ color: 'var(--text)' }}>Chat</h1>
-              <p className="text-xs" style={{ color: 'var(--text-subtle)' }}>Ask your vault, or Edit it — all local, every edit reviewed.</p>
+              {/* Tagline is noise on a phone — the bottom helper text already says this. */}
+              <p className="text-xs hidden sm:block" style={{ color: 'var(--text-subtle)' }}>Ask your vault, or Edit it — all local, every edit reviewed.</p>
             </div>
             {messages.length > 0 && (
-              <div className="flex items-center gap-2">
-                <div className="w-56">
+              // Capture controls: full-width row under the title on mobile; inline on md+.
+              <div className="flex items-center gap-2 md:flex-shrink-0">
+                <div className="flex-1 min-w-0 md:w-56 md:flex-none">
                   <TagPicker value={captureTags} onChange={setCaptureTags} compact />
                 </div>
                 <button
                   onClick={() => void includeInVault()}
                   disabled={capturing}
-                  className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all hover:scale-[1.02] disabled:opacity-50"
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all hover:scale-[1.02] disabled:opacity-50 flex-shrink-0 whitespace-nowrap"
                   style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}
                   title="Turn this conversation into a vault note via the ingest pipeline — tagged with the tags on the left"
                 >
@@ -258,7 +260,7 @@ export default function ChatPage() {
             )}
           </div>
 
-          <div className="flex-1 overflow-y-auto px-6 py-5 flex flex-col gap-4">
+          <div className="flex-1 overflow-y-auto px-4 md:px-6 py-5 flex flex-col gap-4">
             {messages.length === 0 && (
               <div className="flex flex-col items-center justify-center h-full gap-3">
                 <div className="w-16 h-16 rounded-2xl flex items-center justify-center" style={{ background: 'var(--bg-elevated)' }}>
