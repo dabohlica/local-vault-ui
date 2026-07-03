@@ -53,6 +53,12 @@ export async function POST(req: NextRequest) {
       patch.syncIntervalHours = Math.min(168, Math.max(1, Math.floor(body.syncIntervalHours)))
     }
 
+    // Context window (tokens). Bounded to sane values: below 2048 Ollama truncates
+    // prompts into unusability; the upper bound just guards against typos.
+    if (body.chatNumCtx !== undefined) {
+      patch.chatNumCtx = Math.min(131072, Math.max(2048, Math.floor(body.chatNumCtx)))
+    }
+
     const vaultChanged = patch.vaultPath !== undefined && patch.vaultPath !== getConfig().vaultPath
     const next = setConfig(patch)
 

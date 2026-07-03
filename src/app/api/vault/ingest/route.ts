@@ -9,6 +9,7 @@ import { getConfig } from '@/lib/config'
 import { normalizeChanges } from '@/lib/healthFix'
 import { applyTags } from '@/lib/tags'
 import { reconcileUpdates } from '@/lib/merge'
+import { annotateLossWarnings } from '@/lib/nightlyGuard'
 
 export const dynamic = 'force-dynamic'
 
@@ -89,7 +90,7 @@ async function ingestSource(
 
     if (result && Array.isArray(result.changes) && result.changes.length > 0) {
       // Guarantee the user's chosen tags land on the note (code-enforced).
-      result.changes = applyTags(normalizeChanges(await reconcileUpdates(result.changes)), tags)
+      result.changes = annotateLossWarnings(applyTags(normalizeChanges(await reconcileUpdates(result.changes)), tags))
       return { ...result, origin: 'drop' }
     }
     // else: shrink the source and try again

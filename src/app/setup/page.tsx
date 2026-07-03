@@ -16,6 +16,7 @@ type Status = {
     chatModel: string; writerModel: string; librarianModel: string; embedModel: string; visionModel: string
     hasChatModel: boolean; hasWriterModel: boolean; hasLibrarianModel: boolean; hasEmbedModel: boolean; hasVisionModel: boolean
     splitActive: boolean
+    chatNumCtx: number
   }
   index: { chunks: number; built: boolean }
   init: { empty: boolean; hasClaudeMd: boolean; noteCount: number }
@@ -213,6 +214,16 @@ export default function SetupPage() {
     await refresh()
   }
 
+  // Persist the context-window size (saved on blur, not per keystroke).
+  async function saveNumCtx(chatNumCtx: number) {
+    await fetch('/api/setup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chatNumCtx }),
+    })
+    await refresh()
+  }
+
   // Pick any model for a role (chat/writer/librarian/embed/vision); persists immediately.
   async function saveModel(role: Role, model: string) {
     await fetch('/api/setup', {
@@ -367,6 +378,27 @@ export default function SetupPage() {
                     onSelect={(m) => void saveModel('librarianModel', m)} onPull={(m) => pullModel(m, 'librarianModel')} />
                 </div>
               )}
+            </div>
+
+            {/* Context window — the one per-machine tuning knob. Too low silently
+                truncates prompts; too high can OOM or fall back to CPU. */}
+            <div className="rounded-lg px-3 py-2.5 flex flex-col gap-1.5" style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}>
+              <label className="flex items-center gap-2 text-xs" style={{ color: 'var(--text)' }}>
+                <span className="font-medium">Context window</span>
+                <input
+                  type="number" min={2048} max={131072} step={2048}
+                  defaultValue={s.ollama.chatNumCtx}
+                  onBlur={e => { const v = Number(e.target.value); if (v && v !== s.ollama.chatNumCtx) void saveNumCtx(v) }}
+                  className="w-24 rounded-lg px-2 py-1 text-sm outline-none font-mono"
+                  style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text)' }}
+                />
+                tokens
+                <span style={{ color: 'var(--text-subtle)' }}>· advanced</span>
+              </label>
+              <p className="text-xs" style={{ color: 'var(--text-subtle)' }}>
+                Prompt budget per request. Too low silently cuts off big prompts (dropped documents, curation);
+                too high can exhaust RAM/VRAM. 16384 suits most 8–16&nbsp;GB machines.
+              </p>
             </div>
           </div>
         )}

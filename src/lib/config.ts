@@ -33,6 +33,15 @@ export type AppConfig = {
   caretakeEnabled: boolean   // master switch for the in-app scheduler
   caretakeHour: number       // 0–23, local time, for the nightly full caretake
   syncIntervalHours: number  // how often to keep the embedding index fresh
+  // Nightly curation caps. Tunable via data/config.json only (deliberately no UI —
+  // the defaults fit the default 16k-token context; raise perNoteChars if long
+  // notes keep getting marked read-only for the caretaker).
+  nightlyPerNoteChars: number   // per-note content cap in the prompt; beyond it a note is read-only
+  nightlyBatchChars: number     // combined note-content budget per LLM call
+  nightlyMaxNotes: number       // most-recent notes processed per night
+  nightlySkipThreshold: number  // more changed notes than this = bulk import, skip the night
+  nightlyMaxBatches: number     // hard stop on nightly LLM spend
+  nightlyMaxMapPaths: number    // cap on the all-note-paths map given as link/move targets
 }
 
 function defaults(): AppConfig {
@@ -49,6 +58,12 @@ function defaults(): AppConfig {
     caretakeEnabled: true,
     caretakeHour: 3,
     syncIntervalHours: 6,
+    nightlyPerNoteChars: 6000,
+    nightlyBatchChars: 24000,
+    nightlyMaxNotes: 20,
+    nightlySkipThreshold: 60,
+    nightlyMaxBatches: 4,
+    nightlyMaxMapPaths: 400,
   }
 }
 

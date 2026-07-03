@@ -5,6 +5,7 @@ import { ollamaChatStructured } from '@/lib/ollama'
 import { normalizeChanges } from '@/lib/healthFix'
 import { applyTags } from '@/lib/tags'
 import { reconcileUpdates } from '@/lib/merge'
+import { annotateLossWarnings } from '@/lib/nightlyGuard'
 
 // "Include conversation in the vault" — runs the current chat transcript through
 // the SAME ingest pipeline a dropped document uses (retrieve context → draft a
@@ -30,7 +31,7 @@ export async function POST(req: NextRequest) {
     if (!Array.isArray(result.changes) || result.changes.length === 0) {
       return NextResponse.json({ error: 'Model proposed no note', raw }, { status: 502 })
     }
-    result.changes = applyTags(normalizeChanges(await reconcileUpdates(result.changes as Array<{ path: string; action: string; content?: string }>)), tags ?? [])
+    result.changes = annotateLossWarnings(applyTags(normalizeChanges(await reconcileUpdates(result.changes as Array<{ path: string; action: string; content?: string }>)), tags ?? []))
     return NextResponse.json({ ...result, origin: 'chat' })
   } catch (err) {
     return NextResponse.json(

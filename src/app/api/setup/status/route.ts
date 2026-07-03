@@ -70,6 +70,7 @@ export async function GET() {
       hasLibrarianModel: ollamaReachable && hasModel(cfg.librarianModel),
       hasEmbedModel: ollamaReachable && hasModel(cfg.embedModel),
       hasVisionModel: ollamaReachable && hasModel(cfg.visionModel),
+      chatNumCtx: cfg.chatNumCtx,
       // True when the two roles point at the same model as chat (single-model setup).
       splitActive: cfg.writerModel !== cfg.chatModel || cfg.librarianModel !== cfg.chatModel,
     },

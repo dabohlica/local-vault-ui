@@ -31,13 +31,20 @@ type Props = {
   onDiscard?: () => void
 }
 
+// Stable identity for a change. A "move" from the model often carries only
+// from/to (no path), so keying on path alone gave every pathless move the same
+// undefined key — duplicate React keys and one shared approve-checkbox.
+function changeKey(c: Change): string {
+  return c.path ?? `${c.from ?? '?'} → ${c.to ?? '?'}`
+}
+
 // Review a set of proposed vault changes as per-file diffs, approve/reject each,
 // then apply via /api/curate/apply (local write + log + re-index). Shared by the
 // Curate page, every local command, and drag-drop ingest.
 export function ProposalReview({ result, onApplied, onDiscard }: Props) {
   const { showToast } = useToast()
   const [changes, setChanges] = useState<Change[]>(result.changes)
-  const [approved, setApproved] = useState<Set<string>>(new Set(result.changes.map(c => c.path)))
+  const [approved, setApproved] = useState<Set<string>>(new Set(result.changes.map(changeKey)))
   const [applying, setApplying] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
 
@@ -80,7 +87,7 @@ export function ProposalReview({ result, onApplied, onDiscard }: Props) {
       )
       if (active) {
         setChanges(enriched)
-        setApproved(new Set(enriched.map(c => c.path)))
+        setApproved(new Set(enriched.map(changeKey)))
       }
     })()
     return () => { active = false }
@@ -96,7 +103,7 @@ export function ProposalReview({ result, onApplied, onDiscard }: Props) {
 
   async function apply() {
     if (applying) return
-    const selected = changes.filter(c => approved.has(c.path))
+    const selected = changes.filter(c => approved.has(changeKey(c)))
     if (selected.length === 0) return
     setApplying(true)
     try {
@@ -151,7 +158,7 @@ export function ProposalReview({ result, onApplied, onDiscard }: Props) {
           ? ''
           : change.content ?? change.before ?? ''
         return (
-          <div key={change.path} className="card p-4 flex flex-col gap-2">
+          <div key={changeKey(change)} className="card p-4 flex flex-col gap-2">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 min-w-0">
                 <Icon size={14} style={{ color: meta.color, flexShrink: 0 }} />
@@ -161,7 +168,7 @@ export function ProposalReview({ result, onApplied, onDiscard }: Props) {
                 </span>
               </div>
               <label className="flex items-center gap-1.5 text-xs cursor-pointer flex-shrink-0" style={{ color: 'var(--text-muted)' }}>
-                <input type="checkbox" checked={approved.has(change.path)} onChange={() => toggle(change.path)} />
+                <input type="checkbox" checked={approved.has(changeKey(change))} onChange={() => toggle(changeKey(change))} />
                 Apply this change
               </label>
             </div>

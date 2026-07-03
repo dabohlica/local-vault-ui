@@ -45,6 +45,24 @@ export function resolveVaultPath(relativePath: string): string {
   return path.join(getVaultPath(), safe)
 }
 
+// Read a note's current content; null when it's missing, unreadable, or blank.
+// The shared read-with-fallback used by merge/guard/caretake code paths.
+export function readNote(relativePath: string): string | null {
+  try {
+    const content = fs.readFileSync(resolveVaultPath(relativePath), 'utf-8')
+    return content.trim() ? content : null
+  } catch {
+    return null
+  }
+}
+
+// YAML frontmatter at the very start of a note ("---" fences, CRLF-tolerant).
+export const FRONTMATTER_RE = /^---\r?\n[\s\S]*?\r?\n---\r?\n?/
+
+export function stripFrontmatter(content: string): string {
+  return content.replace(FRONTMATTER_RE, '')
+}
+
 export function buildFileTree(dirPath: string, vaultBase: string): FileNode {
   const name = path.basename(dirPath)
   const relativePath = path.relative(vaultBase, dirPath)

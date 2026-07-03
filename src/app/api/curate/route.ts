@@ -5,6 +5,7 @@ import { ollamaChatStructured } from '@/lib/ollama'
 import { normalizeChanges } from '@/lib/healthFix'
 import { applyTags } from '@/lib/tags'
 import { reconcileUpdates } from '@/lib/merge'
+import { annotateLossWarnings } from '@/lib/nightlyGuard'
 
 // A cold model load can take minutes; don't let the platform abort the request.
 export const maxDuration = 300
@@ -42,7 +43,7 @@ export async function POST(req: NextRequest) {
 
     // Guarantee the user's chosen tags land on every touched note (code-enforced,
     // after normalize so frontmatter is present) — independent of the model.
-    result.changes = applyTags(normalizeChanges(await reconcileUpdates(result.changes)), body.tags ?? [])
+    result.changes = annotateLossWarnings(applyTags(normalizeChanges(await reconcileUpdates(result.changes)), body.tags ?? []))
     return NextResponse.json({ ...result, origin: 'add' })
   } catch (err) {
     return NextResponse.json(

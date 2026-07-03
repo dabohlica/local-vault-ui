@@ -5,6 +5,7 @@ import { ollamaChatStructured } from '@/lib/ollama'
 import { getLocalCommand } from '@/lib/commands'
 import { normalizeChanges } from '@/lib/healthFix'
 import { reconcileUpdates } from '@/lib/merge'
+import { annotateLossWarnings } from '@/lib/nightlyGuard'
 
 // A cold model load can take minutes; don't let the platform abort the request.
 export const maxDuration = 300
@@ -45,7 +46,7 @@ export async function POST(req: NextRequest) {
             (c.action === 'move' && c.from && c.to) ||
             (c.action === 'delete' && c.path)))
 
-    result.changes = normalizeChanges(await reconcileUpdates(result.changes))
+    result.changes = annotateLossWarnings(normalizeChanges(await reconcileUpdates(result.changes)))
     return NextResponse.json({ ...result, origin: body.id })
   } catch (err) {
     return NextResponse.json(

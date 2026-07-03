@@ -1,7 +1,7 @@
 import path from 'path'
 import fs from 'fs'
 import Database from 'better-sqlite3'
-import { listAllNotes, resolveVaultPath } from '@/lib/vault'
+import { listAllNotes, resolveVaultPath, stripFrontmatter } from '@/lib/vault'
 import { ollamaEmbed, EMBED_CONTEXT_OVERFLOW } from '@/lib/ollama'
 
 const DB_PATH = path.join(process.cwd(), 'data', 'index.sqlite')
@@ -90,8 +90,7 @@ function splitText(text: string, maxLen: number, overlap = CHUNK_OVERLAP_CHARS):
 // frontmatter similarity (so unrelated daily/log notes mis-match), and crowds out
 // the actual prose. The header keeps just enough context to stay self-locating.
 export function chunkNote(notePath: string, content: string): Array<{ heading: string; content: string }> {
-  const fmMatch = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/.exec(content)
-  const body = fmMatch ? content.slice(fmMatch[0].length) : content
+  const body = stripFrontmatter(content)
   const title = path.basename(notePath).replace(/\.md$/, '')
 
   const budget = Math.max(500, MAX_CHUNK_CHARS - title.length - 40)
@@ -338,7 +337,7 @@ export async function retrieveNotes(
     } catch {
       continue
     }
-    const body = raw.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, '').trim()
+    const body = stripFrontmatter(raw).trim()
     if (!body) continue
     const key = body.slice(0, 400) // cheap near-duplicate key
     if (seen.has(key)) continue

@@ -1,5 +1,4 @@
-import fs from 'fs'
-import { resolveVaultPath } from '@/lib/vault'
+import { readNote } from '@/lib/vault'
 import { ollamaChat } from '@/lib/ollama'
 
 // Re-anchor proposed UPDATES on the real, full current note so the model merges
@@ -66,11 +65,10 @@ export async function reconcileUpdates<T extends Change>(changes: T[]): Promise<
     const isWrite = (c.action === 'create' || c.action === 'update') && typeof c.content === 'string' && !!target
     if (!isWrite) { out.push(c); continue }
 
-    let current: string | null = null
-    try { current = fs.readFileSync(resolveVaultPath(target!), 'utf-8') } catch { current = null }
+    const current = readNote(target!)
 
     // New file, or no real change to merge into — keep as proposed.
-    if (!current || !current.trim() || current.trim() === c.content!.trim()) { out.push(c); continue }
+    if (!current || current.trim() === c.content!.trim()) { out.push(c); continue }
 
     try {
       const merged = await mergeNote(target!, current, c.content!)
