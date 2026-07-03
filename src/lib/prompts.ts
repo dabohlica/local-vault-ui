@@ -107,6 +107,76 @@ ${STRUCTURED_OUTPUT_SPEC}${tagBlock(tags)}`
   ]
 }
 
+export type NightlyNote = { path: string; content: string; truncated: boolean }
+
+// Prompt for the unattended nightly curation pass. Deliberately NOT
+// buildCurationPrompt: that one captures NEW input into the vault and asks for
+// full-file rewrites, which is destructive when the model works from partial
+// context overnight. Here the model gets the FULL current content of the
+// recently-changed notes (the authoritative text) plus a map of every note path,
+// and its job is strictly additive: connect notes, file strays, synthesize NEW
+// linking notes — never rewrite existing prose. auditNightlyChanges() enforces
+// the same rules deterministically after the fact.
+export function buildNightlyCurationPrompt(notes: NightlyNote[], allPaths: string[]) {
+  const claudeMd = loadClaudeMd()
+  const today = new Date().toISOString().slice(0, 10)
+
+  const notesBlock = notes
+    .map(n =>
+      `### Note: ${n.path}${n.truncated ? ' [TRUNCATED — read-only: do NOT update or delete this note]' : ''}\n\n${n.content}`
+    )
+    .join('\n\n---\n\n')
+
+  const system = `You are the night gardener of Daniel's Obsidian vault, running unattended overnight. The
+vault follows strict "AI-first" conventions described below.
+
+--- VAULT CONVENTIONS (_CLAUDE.md) ---
+${claudeMd}
+
+--- ALL NOTE PATHS IN THE VAULT (link and move targets) ---
+${allPaths.join('\n')}
+
+--- RECENTLY CHANGED NOTES (FULL CURRENT CONTENT — this text is authoritative) ---
+${notesBlock}
+
+--- TASK ---
+Your job is strictly ADDITIVE: connect the dots between notes, file strays, and synthesize new linking
+notes. The user's own words are the value of this vault — you must NEVER lose, rewrite, summarize,
+condense, or "clean up" a single line of an existing note.
+
+Allowed operations, in order of preference:
+1. "update" — ONLY to add [[wikilinks]] around existing phrases, append a "## Related" section, or
+   append genuinely new lines at the end of a section. The updated content MUST contain every existing
+   line of the current note, unchanged and in order. You are annotating, not rewriting.
+2. "move" — file a stray note into the right folder. Do NOT include a @@@CONTENT block: the note is
+   relocated with its content untouched.
+3. "create" — a NEW Knowledge/ note that synthesizes a clearly-emerging theme by LINKING to its source
+   notes with [[wikilinks]]. The source notes stay untouched. Follow the AI-first rules: frontmatter,
+   a "## For future Claude" preamble, date ${today}.
+4. "delete" — ONLY for a note whose entire content is already present verbatim in another note shown in
+   full above. When in doubt, don't.
+
+Forbidden, no exceptions:
+- Rewriting, summarizing, condensing, normalizing, or restructuring existing prose.
+- Updating or deleting any note NOT shown in full above (including [TRUNCATED] ones).
+- Merging notes by replacing one's content with a summary of both.
+
+Proposing NOTHING is a good outcome. Only propose changes you are certain about.
+
+${STRUCTURED_OUTPUT_SPEC}`
+
+  return [
+    { role: 'system' as const, content: system },
+    {
+      role: 'user' as const,
+      content:
+        'Review the recently changed notes above and propose only certain, additive changes — ' +
+        'wikilinks, filing, a synthesis note if a theme clearly emerges. If nothing is clearly ' +
+        'worth doing, propose nothing.',
+    },
+  ]
+}
+
 export function buildIngestPrompt(
   filename: string,
   sourceText: string,

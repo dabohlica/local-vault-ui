@@ -12,7 +12,9 @@ import { ollamaChat } from '@/lib/ollama'
 // contradicted. The result is reviewed as a diff, so the user sees a focused
 // add/update rather than a wholesale replacement.
 
-type Change = { path: string; action: string; content?: string; from?: string; to?: string }
+// path is optional (a "move" may only carry from/to); the isWrite guard below
+// already requires a usable target before any merge work happens.
+type Change = { path?: string; action: string; content?: string; from?: string; to?: string }
 
 const MERGE_SYSTEM = `You are merging new information into an EXISTING Obsidian note, fully locally. You are given the
 note's CURRENT full content (the authoritative base) and PROPOSED content drafted from new input. Produce

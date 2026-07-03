@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Loader2, Check, X, FilePlus, FileEdit, ArrowRightLeft, Trash2 } from 'lucide-react'
+import { Loader2, Check, X, FilePlus, FileEdit, ArrowRightLeft, Trash2, AlertTriangle } from 'lucide-react'
 import { DiffView } from '@/components/curate/DiffView'
 import { useToast } from '@/components/shared/Toast'
 
@@ -12,6 +12,9 @@ export type Change = {
   before?: string | null
   from?: string // move source
   to?: string   // move destination (defaults to path)
+  // Caution notes attached by the nightly guard (e.g. "shorter than the current
+  // note") — surfaced so an overnight proposal can't slip a lossy edit past review.
+  warnings?: string[]
 }
 export type ProposalResponse = { changes: Change[]; log_entry: string; summary: string; origin?: string; error?: string; raw?: string }
 
@@ -162,6 +165,11 @@ export function ProposalReview({ result, onApplied, onDiscard }: Props) {
                 Apply this change
               </label>
             </div>
+            {change.warnings?.map(w => (
+              <p key={w} className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--warning)' }}>
+                <AlertTriangle size={12} style={{ flexShrink: 0 }} /> {w}
+              </p>
+            ))}
             {change.action === 'move' && change.content === undefined ? (
               <p className="text-xs" style={{ color: 'var(--text-subtle)' }}>File relocated unchanged.</p>
             ) : (

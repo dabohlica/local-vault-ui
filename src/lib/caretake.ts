@@ -1,11 +1,14 @@
 import fs from 'fs'
-import { syncIndex, indexStats, retrieve } from '@/lib/embeddings'
+import { syncIndex, indexStats } from '@/lib/embeddings'
 import { scanVaultHealth, type HealthReport } from '@/lib/health'
-import { buildHealthFixChanges } from '@/lib/healthFix'
-import { appendToLog, listAllNotes, resolveVaultPath } from '@/lib/vault'
+import { buildHealthFixChanges, normalizeChanges } from '@/lib/healthFix'
+import { appendToLog, listAllNotes, resolveVaultPath, isMetaNote } from '@/lib/vault'
 import { recordOperation, type OpChange } from '@/lib/opsLog'
-import { buildCurationPrompt } from '@/lib/prompts'
+import { buildNightlyCurationPrompt, type NightlyNote } from '@/lib/prompts'
 import { ollamaChatStructured } from '@/lib/ollama'
+import { reconcileUpdates } from '@/lib/merge'
+import { auditNightlyChanges } from '@/lib/nightlyGuard'
+import type { ProposalChange } from '@/lib/structuredOutput'
 import { savePending } from '@/lib/pending'
 
 // Shared caretaking routine, run both on-demand and by the in-app scheduler.
@@ -92,34 +95,115 @@ function applyDeterministicHealthFixes(): number {
   return done.length
 }
 
-// Ask the local model to propose how to integrate/organize the notes that changed
-// in the last day. Saves the proposal to the pending queue (does NOT write to the
-// vault). Returns 1 if a proposal was queued, else 0.
+// The nightly job's purpose is to CONNECT the vault, not rewrite it: the user's
+// own note text is the value (all local, nothing to "enrich" from outside). So the
+// model is grounded on the FULL content of the changed notes — not on retrieval
+// fragments, which is how earlier versions hallucinated whole-note rewrites — and
+// every proposed change passes reconcileUpdates() plus the deterministic
+// auditNightlyChanges() no-loss guard before it may reach the pending queue.
+
+// Per-note content cap in the prompt. A note beyond this is shown truncated and
+// becomes read-only for the model (the guard drops updates/deletes against it).
+const NIGHTLY_PER_NOTE_CHARS = 6000
+// Combined note-content budget per LLM call, sized so _CLAUDE.md + the vault path
+// map + the output spec + the reply all fit inside the default 16k-token window.
+const NIGHTLY_BATCH_CHARS = 24000
+// Most-recent notes processed per night; beyond this the rest waits for tomorrow.
+const NIGHTLY_MAX_NOTES = 20
+// More changed notes than this means a bulk import/migration — a curation pass
+// over that can only do damage, so skip the night entirely.
+const NIGHTLY_SKIP_THRESHOLD = 60
+// Hard stop on nightly LLM spend.
+const NIGHTLY_MAX_BATCHES = 4
+// Cap on the "all note paths" map included for link/move targets.
+const NIGHTLY_MAX_MAP_PATHS = 400
+
+// Ask the local model to propose how to interconnect/organize the notes that
+// changed in the last day. Saves proposals to the pending queue (does NOT write
+// to the vault). Returns the number of proposals queued.
 async function queueNightlyCuration(): Promise<number> {
   const cutoff = Date.now() - DAY_MS
-  const recent = listAllNotes()
-    .filter(n => n.mtime.getTime() >= cutoff)
-    .map(n => n.path)
+  const all = listAllNotes()
+  // Meta notes (Logs/, _CLAUDE.md) are excluded: feeding the caretaker its own
+  // log makes the model synthesize notes about the caretaking run itself.
+  const recent = all
+    .filter(n => n.mtime.getTime() >= cutoff && !isMetaNote(n.path))
+    .sort((a, b) => b.mtime.getTime() - a.mtime.getTime())
+
   if (recent.length === 0) return 0
+  if (recent.length > NIGHTLY_SKIP_THRESHOLD) {
+    appendToLog(
+      `Nightly curation skipped: ${recent.length} notes changed in the last day (looks like a bulk ` +
+        `import). Curation resumes when the vault settles.`
+    )
+    return 0
+  }
 
-  const userText =
-    `These notes changed in the last 24 hours:\n${recent.map(p => `- ${p}`).join('\n')}\n\n` +
-    `As the vault's caretaker, propose high-confidence changes to integrate and organize them: ` +
-    `add missing [[wikilinks]] between clearly-related notes, file stray notes into the right folder ` +
-    `(via "move"), merge obvious duplicates, and—only if a cluster clearly warrants it—synthesize a ` +
-    `permanent Knowledge/ note. Be conservative: propose nothing if there's nothing clearly worth doing.`
+  const skipped = Math.max(0, recent.length - NIGHTLY_MAX_NOTES)
+  const selected = recent.slice(0, NIGHTLY_MAX_NOTES)
 
-  const chunks = await retrieve(recent.join(' '), 12)
-  const messages = buildCurationPrompt(userText, chunks)
-  const { result } = await ollamaChatStructured<{ changes?: unknown[]; log_entry?: string; summary?: string }>({ messages, role: 'librarian' })
+  // Load the full current content of each changed note — the model must see what
+  // it is annotating. Oversized notes are truncated and marked read-only.
+  const notes: NightlyNote[] = []
+  for (const n of selected) {
+    let content: string
+    try { content = fs.readFileSync(resolveVaultPath(n.path), 'utf-8') } catch { continue }
+    if (!content.trim()) continue
+    const truncated = content.length > NIGHTLY_PER_NOTE_CHARS
+    notes.push({ path: n.path, content: truncated ? content.slice(0, NIGHTLY_PER_NOTE_CHARS) : content, truncated })
+  }
+  if (notes.length === 0) return 0
 
-  if (!result || !Array.isArray(result.changes) || result.changes.length === 0) return 0
+  const truncatedPaths = new Set(notes.filter(n => n.truncated).map(n => n.path))
+  const allPaths = all.map(n => n.path).slice(0, NIGHTLY_MAX_MAP_PATHS)
 
-  savePending({
-    origin: 'nightly-curation',
-    summary: result.summary || `Overnight curation over ${recent.length} recently-changed note(s)`,
-    log_entry: result.log_entry || 'Overnight curation proposal.',
-    changes: result.changes,
-  })
-  return 1
+  // Group related notes into the same LLM call (linking/dedup needs co-visibility)
+  // by sorting on path, then greedy-pack into size-bounded batches.
+  const byFolder = [...notes].sort((a, b) => a.path.localeCompare(b.path))
+  const batches: NightlyNote[][] = []
+  let batch: NightlyNote[] = []
+  let batchChars = 0
+  for (const note of byFolder) {
+    if (batch.length > 0 && batchChars + note.content.length > NIGHTLY_BATCH_CHARS) {
+      batches.push(batch)
+      batch = []
+      batchChars = 0
+    }
+    batch.push(note)
+    batchChars += note.content.length
+  }
+  if (batch.length > 0) batches.push(batch)
+
+  let queued = 0
+  for (const b of batches.slice(0, NIGHTLY_MAX_BATCHES)) {
+    // Best-effort per batch: one bad model reply must not lose the other batches.
+    try {
+      const messages = buildNightlyCurationPrompt(b, allPaths)
+      const { result } = await ollamaChatStructured<{ changes?: ProposalChange[]; log_entry?: string; summary?: string }>({ messages, role: 'librarian' })
+      if (!result || !Array.isArray(result.changes) || result.changes.length === 0) continue
+
+      // Re-anchor updates on the full on-disk note (same pass every attended flow
+      // runs), then enforce the no-content-loss rules deterministically.
+      const reconciled = normalizeChanges(await reconcileUpdates(result.changes))
+      const { kept, dropped } = auditNightlyChanges(reconciled, truncatedPaths)
+      if (kept.length === 0) continue
+
+      const guardNote = dropped.length
+        ? `\n\nGuard removed ${dropped.length} destructive change(s): ` +
+          dropped.map(d => `${d.path} (${d.reason})`).join('; ')
+        : ''
+      savePending({
+        origin: 'nightly-curation',
+        summary: result.summary || `Overnight curation over ${b.length} recently-changed note(s)`,
+        log_entry: (result.log_entry || 'Overnight curation proposal.') + guardNote,
+        changes: kept,
+      })
+      queued++
+    } catch { /* model unavailable / bad reply — next batch, or try again tomorrow */ }
+  }
+
+  if (skipped > 0) {
+    appendToLog(`Nightly curation processed the ${NIGHTLY_MAX_NOTES} most recent notes; ${skipped} more wait for the next run.`)
+  }
+  return queued
 }
