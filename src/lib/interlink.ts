@@ -175,6 +175,9 @@ export function brokenLinkTargets(content: string, known: Set<string>): string[]
     const key = target.toLowerCase()
     const base = key.split('/').pop() ?? key
     if (known.has(key) || known.has(base)) continue // resolves already
+    // ![[image.png]] and other file embeds point at assets, not notes — a stub
+    // note could never resolve them, so they're not "broken links" to flag.
+    if (/\.[a-z0-9]{2,5}$/.test(base) && !base.endsWith('.md')) continue
     if (!isLinkable(base)) continue                 // not a safely-stubbable target
     if (seen.has(base)) continue
     seen.add(base)

@@ -135,8 +135,15 @@ export async function POST(req: NextRequest) {
     // an in-stream error event rather than a mismatched JSON response.
     return ndjsonStream(async (write) => {
       const chunks = await retrieveNotes(retrievalQuery, { topNotes: 7, perNoteChars: 6000 })
+      // When a retrieved note embeds images (e.g. an OCR'd Knowledge/Images note
+      // matched the query), pass their paths along so the client can show them —
+      // "retrieve the file on match", not just the note that mentions it.
+      const imagesIn = (content: string): string[] =>
+        Array.from(content.matchAll(/!\[\[([^\]|]+\.(?:png|jpe?g|webp|gif))(?:\|[^\]]*)?\]\]/gi))
+          .map(m => m[1].trim())
+          .slice(0, 3)
       const citations = Array.from(
-        new Map(chunks.map(c => [c.notePath, { path: c.notePath, heading: c.heading }])).values()
+        new Map(chunks.map(c => [c.notePath, { path: c.notePath, heading: c.heading, images: imagesIn(c.content) }])).values()
       )
       // Citations are known before generation — send them first so the client can
       // render sources as soon as the answer starts.

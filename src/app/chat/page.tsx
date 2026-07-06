@@ -7,7 +7,7 @@ import { ProposalReview, type ProposalResponse } from '@/components/shared/Propo
 import { TagPicker } from '@/components/shared/TagPicker'
 import { fetchWithRetry } from '@/lib/fetchRetry'
 
-type Citation = { path: string; heading: string }
+type Citation = { path: string; heading: string; images?: string[] }
 type Message = { role: 'user' | 'assistant'; content: string; citations?: Citation[] }
 type SessionItem = { id: string; title: string; updatedAt: number; messageCount: number }
 
@@ -286,18 +286,37 @@ export default function ChatPage() {
                 </div>
 
                 {m.citations && m.citations.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5">
-                    {m.citations.map(c => (
-                      <button
-                        key={c.path}
-                        onClick={() => router.push(`/explorer?file=${encodeURIComponent(c.path)}`)}
-                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs transition-all duration-150 hover:scale-[1.02] min-w-0 max-w-full"
-                        style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}
-                      >
-                        <FileText size={11} style={{ color: 'var(--primary)', flexShrink: 0 }} />
-                        <span className="truncate">{c.path.replace(/\.md$/, '')}</span>
-                      </button>
-                    ))}
+                  <div className="flex flex-col gap-1.5">
+                    <div className="flex flex-wrap gap-1.5">
+                      {m.citations.map(c => (
+                        <button
+                          key={c.path}
+                          onClick={() => router.push(`/explorer?file=${encodeURIComponent(c.path)}`)}
+                          className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs transition-all duration-150 hover:scale-[1.02] min-w-0 max-w-full"
+                          style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}
+                        >
+                          <FileText size={11} style={{ color: 'var(--primary)', flexShrink: 0 }} />
+                          <span className="truncate">{c.path.replace(/\.md$/, '')}</span>
+                        </button>
+                      ))}
+                    </div>
+                    {/* Images embedded in the cited notes — the matched files themselves. */}
+                    {m.citations.some(c => c.images?.length) && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {Array.from(new Set(m.citations.flatMap(c => c.images ?? []))).map(img => (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            key={img}
+                            src={`/api/vault/asset?path=${encodeURIComponent(img)}`}
+                            alt={img.split('/').pop()}
+                            title={img}
+                            onClick={() => router.push(`/explorer?file=${encodeURIComponent(img)}`)}
+                            className="h-20 max-w-[160px] object-cover rounded-lg cursor-pointer transition-all duration-150 hover:scale-[1.03]"
+                            style={{ border: '1px solid var(--border)' }}
+                          />
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

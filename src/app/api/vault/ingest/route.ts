@@ -1,20 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
-import fs from 'fs'
 import path from 'path'
 import { retrieve } from '@/lib/embeddings'
 import { buildIngestPrompt } from '@/lib/prompts'
-import { ollamaVisionChat, ollamaChatStructured } from '@/lib/ollama'
-import { getVaultPath } from '@/lib/vault'
-import { getConfig } from '@/lib/config'
+import { ollamaChatStructured } from '@/lib/ollama'
 import { normalizeChanges } from '@/lib/healthFix'
 import { applyTags } from '@/lib/tags'
 import { reconcileUpdates } from '@/lib/merge'
 import { annotateLossWarnings } from '@/lib/nightlyGuard'
+import {
+  IMAGE_EXTS, imageSlug, saveKnowledgeImage, describeImage, extractPdfImages,
+  ensureImageSections, amendPrimaryChange, isSkipReply, OCR_PROMPT, PDF_IMAGE_PROMPT,
+} from '@/lib/images'
 
 export const dynamic = 'force-dynamic'
 
 const TEXT_EXTS = new Set(['.md', '.markdown', '.txt', '.text'])
-const IMAGE_EXTS = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif'])
 const MAX_CHARS = 12000 // keep within the model's context
 
 type IngestResult = {
@@ -22,6 +22,21 @@ type IngestResult = {
   log_entry: string
   summary: string
   origin?: string
+}
+
+// Deterministic proposal used when the librarian model can't structure an
+// OCR'd image/PDF into a note: the image is already saved and its OCR text in
+// hand, so file that as-is rather than losing it. No further LLM involved.
+function fallbackImageProposal(notePath: string, content: string, savedAt: string, tags: string[]): IngestResult {
+  const changes = annotateLossWarnings(applyTags(normalizeChanges([
+    { path: notePath, action: 'create' as const, content },
+  ]), tags))
+  return {
+    changes: changes as IngestResult['changes'],
+    log_entry: `Filed image knowledge at ${savedAt} with verbatim OCR (the local model could not draft a richer note).`,
+    summary: `Image(s) filed with OCR under ${savedAt}`,
+    origin: 'drop',
+  }
 }
 
 async function extractText(ext: string, buffer: Buffer): Promise<string | null> {
@@ -38,20 +53,6 @@ async function extractText(ext: string, buffer: Buffer): Promise<string | null> 
     }
   }
   return null
-}
-
-// Save an image into the vault's Assets/ folder, deduping into _inbox/ on collision.
-function saveImage(filename: string, buffer: Buffer): string {
-  const assetsDir = path.join(getVaultPath(), 'Assets')
-  fs.mkdirSync(assetsDir, { recursive: true })
-  let target = path.join(assetsDir, filename)
-  if (fs.existsSync(target)) {
-    const inbox = path.join(getVaultPath(), 'Assets', '_inbox')
-    fs.mkdirSync(inbox, { recursive: true })
-    target = path.join(inbox, `${Date.now()}-${filename}`)
-  }
-  fs.writeFileSync(target, buffer)
-  return path.relative(getVaultPath(), target)
 }
 
 // Turn a source (document text, or an image's vision description) into a proposed
@@ -130,27 +131,11 @@ export async function POST(req: NextRequest) {
       try { const parsed = JSON.parse(tagsField); if (Array.isArray(parsed)) tags = parsed.map(String) } catch { /* ignore malformed */ }
     }
 
-    // --- Image branch: save to Assets, then have a vision-capable model describe it ---
+    // --- Image branch: store under Knowledge/Images/, OCR it, note carries the text ---
     if (IMAGE_EXTS.has(ext)) {
-      const assetPath = saveImage(filename, buffer)
-      const b64 = buffer.toString('base64')
-
-      // Try the dedicated vision model first, then fall back to the chat model — so
-      // a multimodal chat model (e.g. Gemma 3) reads the image directly and no
-      // separate vision model needs to be installed. Dedupe + drop empties.
-      const cfg = getConfig()
-      const candidates = Array.from(new Set([cfg.visionModel, cfg.chatModel].filter(Boolean)))
-      let description: string | null = null
-      for (const model of candidates) {
-        try {
-          description = await ollamaVisionChat({
-            prompt: 'Describe this image in detail and transcribe ALL visible text exactly. Be concise but complete.',
-            imagesBase64: [b64],
-            model,
-          })
-          break
-        } catch { /* model missing or not multimodal — try the next candidate */ }
-      }
+      // Dropped images are filed by month; PDF extractions get per-source folders.
+      const assetPath = saveKnowledgeImage(new Date().toISOString().slice(0, 7), filename, buffer)
+      const description = await describeImage(buffer.toString('base64'), OCR_PROMPT)
       if (description === null) {
         // No installed model could read the image — keep the saved file, skip the note.
         return NextResponse.json({
@@ -162,20 +147,80 @@ export async function POST(req: NextRequest) {
 
       const sourceText = `Image file saved at ${assetPath}.\n\nVisual description and transcribed text:\n${description}`
       const out = await ingestSource(filename, sourceText, assetPath, userNotes, tags)
-      return out instanceof NextResponse ? out : NextResponse.json(out)
+      if (out instanceof NextResponse) {
+        // The librarian model couldn't draft a richer note — but the OCR already
+        // succeeded, so keep the knowledge with a deterministic note instead of
+        // failing the drop. normalizeChanges adds frontmatter + preamble.
+        return NextResponse.json(fallbackImageProposal(
+          `Knowledge/${imageSlug(filename)}.md`,
+          ensureImageSections(userNotes ? `## Notes\n${userNotes}` : '', assetPath, description),
+          assetPath, tags,
+        ))
+      }
+      // Embed + verbatim OCR are guaranteed in code, not left to the model.
+      out.changes = amendPrimaryChange(out.changes, c => ensureImageSections(c, assetPath, description))
+      return NextResponse.json(out)
     }
 
-    // --- Text / PDF branch ---
+    // --- Text branch ---
     const text = await extractText(ext, buffer)
     if (text === null) {
       return NextResponse.json({ error: 'unsupported', detail: `Can't extract text from ${filename}` }, { status: 415 })
     }
-    if (!text.trim()) {
-      return NextResponse.json({ error: 'Document appears to be empty' }, { status: 400 })
+    if (ext !== '.pdf') {
+      if (!text.trim()) {
+        return NextResponse.json({ error: 'Document appears to be empty' }, { status: 400 })
+      }
+      const out = await ingestSource(filename, text, undefined, userNotes, tags)
+      return out instanceof NextResponse ? out : NextResponse.json(out)
     }
 
-    const out = await ingestSource(filename, text, undefined, userNotes, tags)
-    return out instanceof NextResponse ? out : NextResponse.json(out)
+    // --- PDF branch: text plus embedded figures ---
+    // The vision model judges each extracted image: knowledge-carrying figures
+    // (charts, tables, screenshots, diagrams) are stored under Knowledge/Images/
+    // and appended to the note with verbatim OCR; decorative ones come back SKIP
+    // and are never written. For a scanned/image-only PDF (no text layer), the
+    // images' OCR *becomes* the source text instead of failing with "empty".
+    const kept: Array<{ savedPath: string; page: number; name: string; reply: string }> = []
+    try {
+      const images = await extractPdfImages(buffer, { max: 5 })
+      const folder = imageSlug(filename)
+      for (const img of images) {
+        const reply = await describeImage(img.buffer.toString('base64'), PDF_IMAGE_PROMPT)
+        if (!reply || isSkipReply(reply)) continue
+        const savedPath = saveKnowledgeImage(folder, `page${img.page}-${img.name}.png`, img.buffer)
+        kept.push({ savedPath, page: img.page, name: img.name, reply: reply.trim().slice(0, 2500) })
+      }
+    } catch { /* image pass is optional — text (if any) stands on its own */ }
+
+    const sourceText = text.trim()
+      ? text
+      : kept.map(k => `Image on page ${k.page}:\n${k.reply}`).join('\n\n')
+    if (!sourceText.trim()) {
+      return NextResponse.json({ error: 'Document appears to be empty (no text layer and no readable images)' }, { status: 400 })
+    }
+
+    const imageSection = kept.length > 0
+      ? `\n\n## Extracted images\n> Figures extracted from the PDF, judged to carry knowledge. Text is verbatim OCR.\n\n` +
+        kept.map(k => `### Page ${k.page} — ${k.name}\n![[${k.savedPath}]]\n\n${k.reply}`).join('\n\n')
+      : ''
+
+    const out = await ingestSource(filename, sourceText, undefined, userNotes, tags)
+    if (out instanceof NextResponse) {
+      if (kept.length === 0) return out
+      // Drafting failed but the figures are OCR'd and saved — keep the knowledge
+      // with a deterministic note rather than failing the whole drop.
+      return NextResponse.json(fallbackImageProposal(
+        `Knowledge/${imageSlug(filename)}.md`,
+        `${userNotes ? `## Notes\n${userNotes}\n` : ''}${imageSection.trimStart()}`,
+        `Knowledge/Images/${imageSlug(filename)}/`, tags,
+      ))
+    }
+    if (kept.length > 0) {
+      out.changes = amendPrimaryChange(out.changes, c => `${c}${imageSection}`)
+      out.summary = `${out.summary} (+${kept.length} image(s) extracted to Knowledge/Images/${imageSlug(filename)}/)`
+    }
+    return NextResponse.json(out)
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : 'Ingest failed' },

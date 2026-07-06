@@ -34,6 +34,10 @@ export type FileNode = {
   children?: FileNode[]
 }
 
+// Image extensions shown in the explorer tree. Kept local (not imported from
+// lib/images) to avoid a vault ↔ images import cycle.
+const IMAGE_FILE_RE = /\.(png|jpe?g|webp|gif)$/i
+
 export function sanitizePath(relativePath: string): string {
   // Prevent path traversal
   const normalized = path.normalize(relativePath).replace(/^(\.\.[/\\])+/, '')
@@ -82,7 +86,9 @@ export function buildFileTree(dirPath: string, vaultBase: string): FileNode {
     const fullPath = path.join(dirPath, entry.name)
     if (entry.isDirectory()) {
       children.push(buildFileTree(fullPath, vaultBase))
-    } else if (entry.isFile() && entry.name.endsWith('.md')) {
+    } else if (entry.isFile() && (entry.name.endsWith('.md') || IMAGE_FILE_RE.test(entry.name))) {
+      // Images appear in the explorer tree (previewable) — but are never notes:
+      // listAllNotes/indexing stay .md-only.
       children.push({
         name: entry.name,
         path: path.relative(vaultBase, fullPath),

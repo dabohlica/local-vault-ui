@@ -20,13 +20,30 @@ type Props = {
   onBack?: () => void
 }
 
+const IMAGE_RE = /\.(png|jpe?g|webp|gif)$/i
+
+function assetUrl(vaultPath: string): string {
+  return `/api/vault/asset?path=${encodeURIComponent(vaultPath)}`
+}
+
+// Obsidian image embeds — ![[Knowledge/Images/x.png]] or ![[x.png|alt]] — are not
+// standard markdown; rewrite them to ![alt](/api/vault/asset?…) so ReactMarkdown
+// renders the actual image. Non-image [[wikilinks]] are left untouched.
+function renderImageEmbeds(body: string): string {
+  return body.replace(/!\[\[([^\]|]+?)(?:\|([^\]]*))?\]\]/g, (whole, target: string, alt?: string) =>
+    IMAGE_RE.test(target.trim()) ? `![${alt ?? target.trim().split('/').pop()}](${assetUrl(target.trim())})` : whole
+  )
+}
+
 export function MarkdownPreview({ filePath, onBack }: Props) {
   const [data, setData] = useState<FileData | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  const isImageFile = !!filePath && IMAGE_RE.test(filePath)
+
   useEffect(() => {
-    if (!filePath) {
+    if (!filePath || IMAGE_RE.test(filePath)) {
       setData(null)
       return
     }
@@ -74,6 +91,32 @@ export function MarkdownPreview({ filePath, onBack }: Props) {
         <p className="text-sm" style={{ color: 'var(--text-subtle)' }}>
           Select a file from the tree to preview
         </p>
+      </div>
+    )
+  }
+
+  // Direct image preview — vault images (e.g. Knowledge/Images/…) open like notes.
+  if (isImageFile) {
+    return (
+      <div className="flex flex-col h-full overflow-hidden">
+        <div
+          className="flex items-center gap-2 px-4 md:px-6 py-3 flex-shrink-0 border-b"
+          style={{ borderColor: 'var(--border-subtle)', background: 'var(--bg-surface)' }}
+        >
+          {onBack && (
+            <button onClick={onBack} className="md:hidden p-1.5 -ml-1 rounded-lg flex-shrink-0" style={{ color: 'var(--text-muted)' }} aria-label="Back to files">
+              <ArrowLeft size={18} />
+            </button>
+          )}
+          <div className="min-w-0">
+            <p className="text-sm font-medium truncate" style={{ color: 'var(--text)' }}>{filePath.split('/').at(-1)}</p>
+            <p className="text-xs truncate" style={{ color: 'var(--text-subtle)' }}>{filePath}</p>
+          </div>
+        </div>
+        <div className="flex-1 overflow-auto p-6">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={assetUrl(filePath)} alt={filePath} className="max-w-full rounded-xl" style={{ border: '1px solid var(--border)' }} />
+        </div>
       </div>
     )
   }
@@ -166,7 +209,7 @@ export function MarkdownPreview({ filePath, onBack }: Props) {
       {/* Markdown content */}
       <div className="flex-1 overflow-y-auto px-6 py-5">
         <div className="markdown-body max-w-3xl">
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>{data.body}</ReactMarkdown>
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>{renderImageEmbeds(data.body)}</ReactMarkdown>
         </div>
       </div>
     </div>
