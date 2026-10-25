@@ -3,6 +3,9 @@ import fs from 'fs'
 import matter from 'gray-matter'
 import { listAllNotes, resolveVaultPath } from '@/lib/vault'
 
+// Reads live state — never prerender at build time (next build would freeze it).
+export const dynamic = 'force-dynamic'
+
 export type BriefingMeta = { path: string; title: string; date: string; tags: string[] }
 
 // YAML auto-parses unquoted dates into Date objects; normalize to YYYY-MM-DD.

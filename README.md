@@ -37,9 +37,16 @@ caretaking, and troubleshooting.
 (SQLite), the local vault filesystem.
 
 **Not allowed / not present in the codebase:** OpenAI / Anthropic / Gemini APIs, external
-vector databases, external telemetry. The only module that makes outbound HTTP requests is
-[`src/lib/ollama.ts`](src/lib/ollama.ts), and it asserts the target host is loopback
-(`localhost`/`127.0.0.1`/`::1`) before every call. Everything else is filesystem-only.
+vector databases, external telemetry. Two modules make HTTP requests:
+- [`src/lib/ollama.ts`](src/lib/ollama.ts) talks to the model servers and asserts the target host is
+  loopback (`localhost`/`127.0.0.1`/`::1`) before every call.
+- [`src/lib/egress.ts`](src/lib/egress.ts) fetches the feeds you add in the **Inbox**, and nothing else.
+  It sends GET requests only, with no request body, so all that goes out is the feed URL or your arXiv
+  query. The first hop must be a host from your configured sources. Private and loopback addresses are
+  refused, even after a redirect, so a feed can't be used to reach Ollama or the app. Every request is
+  logged to `data/egress.jsonl`. With no sources configured, it never runs.
+
+Everything else is filesystem-only.
 
 **Network access** (`src/middleware.ts`, `src/lib/access.ts`):
 - `npm run dev` / `start` bind to `127.0.0.1` only. `dev:lan` / `start:lan` bind to this machine's
@@ -96,6 +103,8 @@ See [SETUP.md](SETUP.md) for per-machine model recommendations.
 | **Chat** | Ask the vault (hybrid retrieval, multi-turn, sessions) or flip to **Edit** to change it. Answers cite source notes; edits are diffs you approve |
 | **Curate** | Paste raw notes / a meeting summary; the local model proposes multi-file updates (project page, daily note, people, decisions) following the AI-first conventions. Review per-file diffs, approve, apply — logged to `Logs/YYYY-MM-DD.md` and re-indexed |
 | **Import** | Bulk-build a vault from a folder of exports (Markdown/Notion/Evernote/`.docx`/PDF/`.csv`…), batch-reviewed |
+| **Inbox** | New papers and articles from your sources (arXiv searches, RSS/Atom feeds), ranked by how close they are to your vault and to what you kept before. Swipe right to keep: the item is saved as a new note under `Knowledge/Sources/<Section>/`. Swipe left to skip: future ranking learns from it. Swipe down to park it for later. |
+| **Morning briefing** | Built every morning (time set under Inbox → Sources) from the best new inbox items per section, with a sentence on why each matters to you. Shown as the first dashboard briefing tab. |
 | **Review** | Proposals the overnight caretaker queued for approval |
 | **Commands** | 10 local workflows: Daily · Meeting · Person · Project · Task · Dev Log · Board · Recap · Synthesize · Vault Health · Interlink |
 | **Explorer / Search** | File tree + Markdown preview with live `[[wikilinks]]`; full-text search |
@@ -135,6 +144,30 @@ half on a 16 GB Mac.
 
 `Sync Index` (top bar) does an incremental re-embed of only notes whose mtime changed.
 `POST /api/index/rebuild` does a full rebuild.
+
+## Inbox & morning briefing
+
+Sources are configured on the **Inbox → Sources** tab. Each source has a *section* (`research`,
+`work`, `tech`…), which is how ranking, the briefing and the note folder are grouped. The source list
+is stored in `data/sources.json`.
+
+1. **Fetch:** the server scheduler polls every `feedIntervalHours` (default 6). Items older than 30 days
+   are ignored. Duplicates are dropped by identity (arXiv id across versions and abs/pdf links, or the URL
+   with tracking parameters removed) and by title.
+2. **Score:** each item is embedded once with the same model as the index. Its *vault match* is its
+   similarity to your closest note. After a few swipes in a section, the score also blends in similarity
+   to what you kept there, and items that look more like your skips than your keeps are pushed down.
+3. **Explain:** the writer model adds a two-sentence "why this matters to you" to the top items. If the
+   model is down, the abstract is shown instead.
+4. **Swipe:** keeping an item creates a note (never overwriting; the file name gets a suffix if it is
+   taken) with AI-first frontmatter (`type: research`, `source`, `confidence: stated`), the source's
+   abstract and links to the closest notes. Undo deletes that note only if you haven't edited it since.
+5. **Briefing:** daily at `briefingHour` (default 07:00), the app polls once more and takes the top 5 new
+   items per section. Any of them without a "why" get one, and a 2–3 sentence overview is added. The
+   briefing is saved to `data/briefings/YYYY-MM-DD.json`.
+
+Candidates live in `data/inbox.sqlite`, **not** in the vault, so nothing you haven't kept can show up in
+chat answers or search.
 
 ## Curation conventions
 

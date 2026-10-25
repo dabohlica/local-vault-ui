@@ -6,8 +6,9 @@ model curate and reorganize them, drop in documents, and run knowledge workflows
 no cloud vector DBs, no telemetry.
 
 > **Vault data never leaves your device.** The only AI network call is to Ollama on `localhost`.
-> (The single exception is an optional automatic `git pull` on load if your vault is a git repo — it
-> degrades silently when offline.)
+> (Exceptions: an optional automatic `git pull` on load if your vault is a git repo, and fetching the
+> feeds you add in the Inbox. Those are GET requests to the hosts you configured; nothing from the vault
+> is sent. See README → Security boundary.)
 
 Works on **macOS and Windows**. This one guide covers everything; **pick your path in Step 4.**
 Want it on your phone too? See **[MOBILE.md](MOBILE.md)** (Tailscale/Wi-Fi access + GitHub sync).

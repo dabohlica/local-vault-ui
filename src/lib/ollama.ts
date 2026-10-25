@@ -1,8 +1,9 @@
-// Local-only model client. Security boundary: this is the ONLY module in the
-// app that makes outbound HTTP requests, and it only ever talks to OLLAMA_HOST
+// Local-only model client. Security boundary: the only module that sends vault
+// content anywhere, and it only ever talks to OLLAMA_HOST
 // (default http://localhost:11434) or, for models named "mlx:<repo>", to a local
 // MLX server at MLX_HOST (default http://127.0.0.1:8080, `mlx_vlm.server`). Both
 // are asserted to be loopback before every call. No vault data leaves the device.
+// (Feed fetching lives in egress.ts: GET-only, sends nothing from the vault.)
 
 import { getConfig } from '@/lib/config'
 import { parseStructuredOutput } from '@/lib/structuredOutput'

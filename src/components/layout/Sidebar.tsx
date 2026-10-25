@@ -13,6 +13,7 @@ import {
   FilePlus,
   Settings,
   Moon,
+  Inbox,
   X,
 } from 'lucide-react'
 import { cn } from '@/lib/cn'
@@ -21,6 +22,7 @@ const NAV_ITEMS = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/add', label: 'Add', icon: FilePlus },
   { href: '/chat', label: 'Chat', icon: MessageSquare },
+  { href: '/inbox', label: 'Inbox', icon: Inbox },
   { href: '/review', label: 'Review', icon: Moon },
   { href: '/commands', label: 'Commands', icon: Terminal },
   { href: '/explorer', label: 'Explorer', icon: FolderOpen },
@@ -38,6 +40,7 @@ export function Sidebar({
   const pathname = usePathname()
   const [vaultLabel, setVaultLabel] = useState('—')
   const [pending, setPending] = useState(0)
+  const [inboxNew, setInboxNew] = useState(0)
 
   useEffect(() => {
     fetch('/api/setup/status')
@@ -50,6 +53,10 @@ export function Sidebar({
     fetch('/api/pending')
       .then(r => r.json())
       .then((d: { count?: number }) => setPending(d.count ?? 0))
+      .catch(() => {})
+    fetch('/api/inbox?countOnly=1')
+      .then(r => r.json())
+      .then((d: { counts?: { byStatus?: { new?: number } } }) => setInboxNew(d.counts?.byStatus?.new ?? 0))
       .catch(() => {})
   }, [pathname])
 
@@ -134,14 +141,17 @@ export function Sidebar({
                 style={{ color: active ? 'var(--primary)' : 'inherit' }}
               />
               <span className="flex-1">{label}</span>
-              {href === '/review' && pending > 0 && (
-                <span
-                  className="text-xs font-semibold px-1.5 py-0.5 rounded-full min-w-[20px] text-center"
-                  style={{ background: 'var(--primary)', color: 'white' }}
-                >
-                  {pending}
-                </span>
-              )}
+              {(() => {
+                const n = href === '/review' ? pending : href === '/inbox' ? inboxNew : 0
+                return n > 0 && (
+                  <span
+                    className="text-xs font-semibold px-1.5 py-0.5 rounded-full min-w-[20px] text-center"
+                    style={{ background: 'var(--primary)', color: 'white' }}
+                  >
+                    {n > 99 ? '99+' : n}
+                  </span>
+                )
+              })()}
             </Link>
           )
         })}

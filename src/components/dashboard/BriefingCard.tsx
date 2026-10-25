@@ -7,6 +7,10 @@ import { RefreshCw, Brain } from 'lucide-react'
 
 type BriefingMeta = { path: string; title: string; date: string; tags: string[] }
 
+// The app's own morning briefing (built from the inbox, stored outside the vault)
+// shows as the first tab, next to briefing notes found in the vault.
+const MORNING = '__morning__'
+
 // Friendlier tab label: strip a trailing "Briefing" word so e.g.
 // "AI Trending Briefing" -> "AI Trending", "Stock & Trading Briefing" -> "Stock & Trading".
 function tabLabel(title: string) {
@@ -21,16 +25,16 @@ export function BriefingCard() {
   const [date, setDate] = useState<string>('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [building, setBuilding] = useState(false)
 
   // Discover available briefings once.
   const loadList = useCallback(async () => {
     try {
       const res = await fetch('/api/vault/briefings')
       const data = await res.json() as { briefings?: BriefingMeta[] }
-      const list = data.briefings ?? []
+      const list = [{ path: MORNING, title: 'Morning', date: '', tags: [] }, ...(data.briefings ?? [])]
       setBriefings(list)
       setActive(prev => prev && list.some(b => b.path === prev) ? prev : (list[0]?.path ?? null))
-      if (list.length === 0) { setError('No briefings found'); setLoading(false) }
     } catch {
       setError('Failed to load briefings')
       setLoading(false)
@@ -42,6 +46,14 @@ export function BriefingCard() {
     setLoading(true)
     setError(null)
     try {
+      if (path === MORNING) {
+        const d = await fetch('/api/briefing', { cache: 'no-store' }).then(r => r.json()) as { briefing: { markdown: string } | null; running: boolean }
+        setBuilding(d.running)
+        const parsed = d.briefing ? parseBriefing(d.briefing.markdown) : { content: '', date: '' }
+        setContent(parsed.content)
+        setDate(parsed.date)
+        return
+      }
       const res = await fetch(`/api/vault/file?path=${encodeURIComponent(path)}`)
       if (!res.ok) throw new Error('Briefing not found')
       const d = await res.json() as { content: string }
@@ -56,6 +68,19 @@ export function BriefingCard() {
   }, [])
 
   useEffect(() => { void loadList() }, [loadList])
+
+  // Build today's briefing now, then poll until it's done.
+  async function buildMorning() {
+    setBuilding(true)
+    await fetch('/api/briefing', { method: 'POST' }).catch(() => {})
+    const check = async () => {
+      const d = await fetch('/api/briefing', { cache: 'no-store' }).then(r => r.json()).catch(() => ({ running: false }))
+      if (d.running) { setTimeout(() => void check(), 3000); return }
+      setBuilding(false)
+      void loadContent(MORNING)
+    }
+    setTimeout(() => void check(), 3000)
+  }
   useEffect(() => { if (active) void loadContent(active) }, [active, loadContent])
 
   return (
@@ -71,13 +96,13 @@ export function BriefingCard() {
           </div>
         </div>
         <button
-          onClick={() => active && void loadContent(active)}
-          disabled={loading}
+          onClick={() => active === MORNING ? void buildMorning() : active && void loadContent(active)}
+          disabled={loading || building}
           className="p-1.5 rounded-lg transition-all duration-150 hover:scale-110 disabled:opacity-50"
           style={{ background: 'var(--bg-elevated)', color: 'var(--text-muted)' }}
-          title="Refresh"
+          title={active === MORNING ? 'Build today’s briefing now' : 'Refresh'}
         >
-          <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+          <RefreshCw size={14} className={loading || building ? 'animate-spin' : ''} />
         </button>
       </div>
 
@@ -119,9 +144,21 @@ export function BriefingCard() {
             </p>
           </div>
         )}
-        {!loading && !error && (
+        {!loading && !error && active === MORNING && !content && (
+          <div className="flex flex-col items-center justify-center h-full gap-3 text-center">
+            <p className="text-sm" style={{ color: 'var(--text-subtle)' }}>
+              No morning briefing yet. Add sources in the <a href="/inbox" style={{ color: 'var(--primary)' }}>Inbox</a>; it&apos;s then built every morning.
+            </p>
+          </div>
+        )}
+        {!loading && !error && content && (
           <div className="markdown-body">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              components={{ a: ({ href, children }) => <a href={href} {...(href?.startsWith('http') ? { target: '_blank', rel: 'noopener noreferrer' } : {})}>{children}</a> }}
+            >
+              {content}
+            </ReactMarkdown>
           </div>
         )}
       </div>

@@ -62,6 +62,22 @@ export async function POST(req: NextRequest) {
       patch.syncIntervalHours = Math.min(168, Math.max(1, Math.floor(body.syncIntervalHours)))
     }
 
+    // Inbox + morning briefing.
+    if (body.feedsEnabled !== undefined) patch.feedsEnabled = !!body.feedsEnabled
+    if (body.feedIntervalHours !== undefined) {
+      patch.feedIntervalHours = Math.min(48, Math.max(1, Math.floor(body.feedIntervalHours)))
+    }
+    if (body.briefingHour !== undefined) {
+      patch.briefingHour = Math.min(23, Math.max(0, Math.floor(body.briefingHour)))
+    }
+    if (body.feedNoteFolder !== undefined) {
+      const folder = body.feedNoteFolder.trim().replace(/^[/\\]+|[/\\]+$/g, '')
+      if (!folder || folder.split(/[/\\]/).some(seg => seg.startsWith('.'))) {
+        return NextResponse.json({ error: 'Pick a normal folder inside the vault for accepted items.' }, { status: 400 })
+      }
+      patch.feedNoteFolder = folder
+    }
+
     // Context window (tokens). Bounded to sane values: below 2048 Ollama truncates
     // prompts into unusability; the upper bound just guards against typos.
     if (body.chatNumCtx !== undefined) {

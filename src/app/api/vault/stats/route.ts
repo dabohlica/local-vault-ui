@@ -4,6 +4,9 @@ import { promisify } from 'util'
 import { getVaultPath, countMarkdownFiles } from '@/lib/vault'
 import fs from 'fs'
 
+// Reads live state — never prerender at build time (next build would freeze it).
+export const dynamic = 'force-dynamic'
+
 const execFileAsync = promisify(execFile)
 
 export async function GET() {

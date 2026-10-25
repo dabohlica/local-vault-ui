@@ -186,11 +186,15 @@ function assertIndexMatchesModel(): void {
   }
 }
 
-// Embed a query and score it against every chunk (dot product of normalized vectors).
-async function scoreAll(query: string): Promise<{ cache: VectorCache; scores: Float32Array }> {
+// A query vector in the index's space (query prefix applied, L2-normalized).
+export async function embedQuery(text: string): Promise<Float32Array> {
+  return decodeVector(encodeVector(await ollamaEmbed(embedPrefixes(getConfig().embedModel).query + text)))
+}
+
+// Score a query vector against every chunk (dot product of normalized vectors).
+function scoreVector(q: Float32Array): { cache: VectorCache; scores: Float32Array } {
   assertIndexMatchesModel()
   const cache = loadCache()
-  const q = decodeVector(encodeVector(await ollamaEmbed(embedPrefixes(getConfig().embedModel).query + query)))
   const n = cache.notePaths.length
   const scores = new Float32Array(n)
   if (q.length !== cache.dim) {
@@ -230,7 +234,13 @@ export function chunksOfNote(notePath: string): IndexedChunk[] {
 
 // Semantic ranking: chunk ids by cosine similarity to the query, best first.
 export async function denseSearch(query: string, limit = 50): Promise<ScoredId[]> {
-  const { cache, scores } = await scoreAll(query)
+  assertIndexMatchesModel()
+  return denseSearchVector(await embedQuery(query), limit)
+}
+
+// Same ranking for a vector you already have (e.g. a stored feed-item embedding).
+export function denseSearchVector(q: Float32Array, limit = 50): ScoredId[] {
+  const { cache, scores } = scoreVector(q)
   return Array.from(scores.keys())
     .sort((a, b) => scores[b] - scores[a])
     .slice(0, limit)

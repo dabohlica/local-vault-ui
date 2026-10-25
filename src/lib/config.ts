@@ -40,6 +40,12 @@ export type AppConfig = {
   caretakeEnabled: boolean   // master switch for the in-app scheduler
   caretakeHour: number       // 0–23, local time, for the nightly full caretake
   syncIntervalHours: number  // how often to keep the embedding index fresh
+  // Inbox (feeds → swipe → vault) and the morning briefing. Sources live in
+  // data/sources.json; with none configured nothing is ever fetched.
+  feedsEnabled: boolean
+  feedIntervalHours: number  // how often to poll the sources
+  briefingHour: number       // 0–23, local time, for the morning briefing
+  feedNoteFolder: string     // where accepted items land, + "/<Section>"
   // Nightly curation caps. Tunable via data/config.json only (deliberately no UI —
   // the defaults fit the default 16k-token context; raise perNoteChars if long
   // notes keep getting marked read-only for the caretaker).
@@ -67,6 +73,10 @@ function defaults(): AppConfig {
     caretakeEnabled: true,
     caretakeHour: 3,
     syncIntervalHours: 6,
+    feedsEnabled: true,
+    feedIntervalHours: 6,
+    briefingHour: 7,
+    feedNoteFolder: 'Knowledge/Sources',
     nightlyPerNoteChars: 6000,
     nightlyBatchChars: 24000,
     nightlyMaxNotes: 20,

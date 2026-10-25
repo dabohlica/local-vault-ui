@@ -7,19 +7,25 @@ export type ExtractedDoc = { title: string; text: string }
 
 const TEXT_EXTS = new Set(['.md', '.markdown', '.txt', '.text'])
 
-function decodeEntities(s: string): string {
+// Out-of-range numeric entities would make String.fromCodePoint throw.
+function codePoint(n: number): string {
+  return Number.isInteger(n) && n > 0 && n <= 0x10ffff ? String.fromCodePoint(n) : ''
+}
+
+export function decodeEntities(s: string): string {
   return s
     .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
+    .replace(/&#39;|&apos;/g, "'")
+    .replace(/&#x([0-9a-f]+);/gi, (_, h) => codePoint(parseInt(h, 16)))
+    .replace(/&#(\d+);/g, (_, n) => codePoint(Number(n)))
+    .replace(/&amp;/g, '&') // last, so "&amp;lt;" stays "&lt;"
 }
 
 // Strip HTML to readable text: drop script/style, turn block tags into newlines.
-function htmlToText(html: string): string {
+export function htmlToText(html: string): string {
   return decodeEntities(
     html
       .replace(/<(script|style)[\s\S]*?<\/\1>/gi, '')
