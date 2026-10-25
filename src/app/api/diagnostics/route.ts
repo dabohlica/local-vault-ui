@@ -20,8 +20,10 @@ export async function GET() {
   // Index.
   let chunks = 0, indexedNotes = 0
   let indexedPaths: string[] = []
+  let indexModel: string | null = null, modelMatches = true
   try {
     const s = indexStats(); chunks = s.chunks; indexedNotes = s.notes
+    indexModel = s.model; modelMatches = s.modelMatches
     indexedPaths = listIndexedNotePaths()
   } catch { /* no index yet */ }
   const indexedSet = new Set(indexedPaths)
@@ -50,11 +52,12 @@ export async function GET() {
   if (!ollamaReachable) problems.push(`Ollama isn't reachable at ${OLLAMA_HOST} — start it, then re-sync.`)
   if (ollamaReachable && !embedInstalled) problems.push(`Embedding model "${cfg.embedModel}" isn't installed — pull it in Settings, then Sync Index.`)
   if (vaultExists && ollamaReachable && embedInstalled && unindexed.length > 0) problems.push(`${unindexed.length} note(s) on disk aren't indexed yet — click Sync Index (or wait for auto-sync).`)
+  if (indexModel && !modelMatches) problems.push(`The index was built with "${indexModel}" but the embedding model is now "${cfg.embedModel}" — it re-embeds on the next sync (or click Rebuild index).`)
   if (stale.length > 0) problems.push(`${stale.length} indexed note(s) no longer exist on disk — they'll be pruned on next sync.`)
 
   return NextResponse.json({
     vault: { path: cfg.vaultPath, exists: vaultExists, notesOnDisk: onDisk.length },
-    index: { chunks, indexedNotes, dbPath: indexDbPath(), cwd: process.cwd() },
+    index: { chunks, indexedNotes, model: indexModel, modelMatches, dbPath: indexDbPath(), cwd: process.cwd() },
     embed: { model: cfg.embedModel, ollamaReachable, embedInstalled, host: OLLAMA_HOST },
     unindexed: unindexed.slice(0, 50),
     unindexedCount: unindexed.length,

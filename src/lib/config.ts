@@ -1,4 +1,5 @@
 import fs from 'fs'
+import os from 'os'
 import path from 'path'
 
 // Runtime configuration, stored locally in data/config.json (gitignored).
@@ -98,4 +99,17 @@ export function isConfigured(): boolean {
   } catch {
     return false
   }
+}
+
+// Folders that must never become "the vault": the app gives the vault full
+// read/write/move/delete, so pointing it at / or your home folder (or any folder
+// containing it) would expose everything — likewise the app's own directory
+// (source + data/). Returns a reason, or null if the folder is acceptable.
+export function unsafeVaultPathReason(resolved: string, home = os.homedir(), appDir = process.cwd()): string | null {
+  const p = path.resolve(resolved)
+  const contains = (parent: string, child: string) => child === parent || child.startsWith(parent + path.sep)
+  if (p === path.parse(p).root) return 'the filesystem root'
+  if (contains(p, home)) return 'your home folder (or a folder containing it)'
+  if (contains(p, appDir) || contains(appDir, p)) return "the app's own directory"
+  return null
 }

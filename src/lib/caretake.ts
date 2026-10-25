@@ -2,7 +2,7 @@ import fs from 'fs'
 import { syncIndex, indexStats } from '@/lib/embeddings'
 import { scanVaultHealth, type HealthReport } from '@/lib/health'
 import { buildHealthFixChanges, normalizeChanges } from '@/lib/healthFix'
-import { appendToLog, listAllNotes, readNote, resolveVaultPath, isMetaNote } from '@/lib/vault'
+import { appendToLog, listAllNotes, readNote, resolveVaultPath, isMetaNote, contentHash, stampBaseHashes } from '@/lib/vault'
 import { recordOperation, type OpChange } from '@/lib/opsLog'
 import { buildNightlyCurationPrompt, type NightlyNote } from '@/lib/prompts'
 import { ollamaChatStructured } from '@/lib/ollama'
@@ -30,7 +30,17 @@ export type CaretakeResult = {
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
-export async function runCaretake(mode: 'sync' | 'full'): Promise<CaretakeResult> {
+// One full run at a time: the scheduler and a manual/cron POST /api/caretake can
+// overlap, and two concurrent nightly passes would queue duplicate proposals.
+const inflight = ((globalThis as unknown as { __vaultCaretake?: { full: Promise<CaretakeResult> | null } }).__vaultCaretake ??= { full: null })
+
+export function runCaretake(mode: 'sync' | 'full'): Promise<CaretakeResult> {
+  if (mode === 'sync') return runCaretakeOnce('sync')
+  inflight.full ??= runCaretakeOnce('full').finally(() => { inflight.full = null })
+  return inflight.full
+}
+
+async function runCaretakeOnce(mode: 'sync' | 'full'): Promise<CaretakeResult> {
   const sync = await syncIndex()
 
   let health: HealthReport | null = null
@@ -150,6 +160,9 @@ async function queueNightlyCuration(): Promise<number> {
   if (notes.length === 0) return 0
 
   const truncatedPaths = new Set(notes.filter(n => n.truncated).map(n => n.path))
+  // Fingerprint exactly what the model is shown, so a note edited between now and
+  // the morning review can't be silently overwritten by this proposal.
+  const seenHashes = new Map(notes.filter(n => !n.truncated).map(n => [n.path, contentHash(n.content)]))
   const allPaths = all.map(n => n.path).slice(0, cfg.nightlyMaxMapPaths)
 
   // Group related notes into the same LLM call (linking/dedup needs co-visibility)
@@ -190,7 +203,7 @@ async function queueNightlyCuration(): Promise<number> {
         origin: 'nightly-curation',
         summary: result.summary || `Overnight curation over ${b.length} recently-changed note(s)`,
         log_entry: (result.log_entry || 'Overnight curation proposal.') + guardNote,
-        changes: kept,
+        changes: stampBaseHashes(kept, seenHashes),
       })
       queued++
     } catch { /* model unavailable / bad reply — next batch, or try again tomorrow */ }

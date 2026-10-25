@@ -146,8 +146,9 @@ The sidebar:
   Obsidian*. It also syncs on chat and on a timer. You rarely need the manual **Sync Index** button.
 - **Automatic caretaking** (Settings → *Automatic caretaking*). While the app is open it keeps the
   index fresh and, at a nightly hour, **auto-applies safe deterministic fixes** (frontmatter/preamble)
-  and **queues** a model-driven curation proposal into **Review**. It runs only while the app is open
-  (with catch-up on next launch). For true 24/7, point an OS cron at it:
+  and **queues** a model-driven curation proposal into **Review**. It runs on the server while the
+  server is running (no tab needed), with catch-up after a restart. Without a running server, point an
+  OS cron at it:
 
   ```bash
   # nightly full caretake at 03:00, app open or not

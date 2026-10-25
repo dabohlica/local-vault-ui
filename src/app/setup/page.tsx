@@ -117,9 +117,11 @@ export default function SetupPage() {
     autoPicked.current = true
     const o = status.ollama
     const patch: Partial<Record<Role, string>> = {}
-    if (!o.hasChatModel) { const c = pickChat(o.installed); if (c) patch.chatModel = c }
+    // Never auto-replace an explicit MLX choice (its server may just be stopped).
+    const isMlx = (m: string) => m.startsWith('mlx:')
+    if (!o.hasChatModel && !isMlx(o.chatModel)) { const c = pickChat(o.installed); if (c) patch.chatModel = c }
     if (!o.hasEmbedModel) { const e = pickEmbed(o.installed); if (e) patch.embedModel = e }
-    if (!o.hasVisionModel) { const v = pickVision(o.installed); if (v) patch.visionModel = v }
+    if (!o.hasVisionModel && !isMlx(o.visionModel)) { const v = pickVision(o.installed); if (v) patch.visionModel = v }
     if (Object.keys(patch).length) {
       void fetch('/api/setup', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch),

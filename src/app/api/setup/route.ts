@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
-import { getConfig, setConfig, type AppConfig } from '@/lib/config'
-import { resetIndex } from '@/lib/embeddings'
+import { getConfig, setConfig, unsafeVaultPathReason, type AppConfig } from '@/lib/config'
+import { resetIndex, syncIndex } from '@/lib/embeddings'
 
 export async function POST(req: NextRequest) {
   try {
@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
     if (body.vaultPath !== undefined) {
       // Cross-platform ~ expansion (os.homedir works on Windows + macOS).
       const p = body.vaultPath.trim().replace(/^~(?=$|[/\\])/, os.homedir())
-      const resolved = path.resolve(p)
+      let resolved = path.resolve(p)
       let stat: fs.Stats
       try {
         stat = fs.statSync(resolved)
@@ -22,6 +22,11 @@ export async function POST(req: NextRequest) {
       }
       if (!stat.isDirectory()) {
         return NextResponse.json({ error: `Not a directory: ${resolved}` }, { status: 400 })
+      }
+      resolved = fs.realpathSync(resolved) // judge the real folder, not a symlink to it
+      const unsafe = unsafeVaultPathReason(resolved)
+      if (unsafe) {
+        return NextResponse.json({ error: `Refusing to use ${unsafe} as the vault: ${resolved}. Pick the vault folder itself.` }, { status: 400 })
       }
       patch.vaultPath = resolved
     }
@@ -59,12 +64,19 @@ export async function POST(req: NextRequest) {
       patch.chatNumCtx = Math.min(131072, Math.max(2048, Math.floor(body.chatNumCtx)))
     }
 
-    const vaultChanged = patch.vaultPath !== undefined && patch.vaultPath !== getConfig().vaultPath
+    const prev = getConfig()
+    const vaultChanged = patch.vaultPath !== undefined && patch.vaultPath !== prev.vaultPath
+    const embedChanged = patch.embedModel !== undefined && patch.embedModel !== prev.embedModel
     const next = setConfig(patch)
 
     // Switching vaults invalidates the embedding index (it held the old vault's chunks).
     if (vaultChanged) {
       try { resetIndex() } catch { /* index may not exist yet */ }
+    }
+    // A new embedding model means a new vector space: start the full re-embed now
+    // (syncIndex detects the model change) rather than on the next chat.
+    if (embedChanged && !vaultChanged) {
+      void syncIndex().catch(() => { /* model not pulled yet — Diagnostics explains */ })
     }
 
     return NextResponse.json({ success: true, config: next, vaultChanged })

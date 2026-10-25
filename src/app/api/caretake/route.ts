@@ -2,18 +2,23 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getConfig } from '@/lib/config'
 import { runCaretake } from '@/lib/caretake'
 import { ensureWatcher } from '@/lib/watcher'
+import { readSchedulerState, startScheduler } from '@/lib/scheduler'
 
-// GET → the current schedule, so the in-app scheduler knows when/how often to run.
-// Also a convenient heartbeat to (re)start the live-indexing watcher, since the
-// client polls this on load and every few minutes.
+// GET → the schedule plus the last nightly result (the client toasts when a new
+// one landed). Also a heartbeat that (re)starts the server-side scheduler and the
+// live-indexing watcher, in case instrumentation didn't run (e.g. dev HMR).
 export async function GET() {
   const c = getConfig()
+  startScheduler()
   const watcher = ensureWatcher()
+  const state = readSchedulerState()
   return NextResponse.json({
     caretakeEnabled: c.caretakeEnabled,
     caretakeHour: c.caretakeHour,
     syncIntervalHours: c.syncIntervalHours,
     watcher,
+    lastFullAt: state.lastFullAt,
+    lastFullSummary: state.lastFullSummary,
   })
 }
 

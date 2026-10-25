@@ -15,6 +15,8 @@ export type Change = {
   // Caution notes attached by the nightly guard (e.g. "shorter than the current
   // note") — surfaced so an overnight proposal can't slip a lossy edit past review.
   warnings?: string[]
+  // Version of the target this change was built against (see /api/curate/apply).
+  baseHash?: string | null
 }
 export type ProposalResponse = { changes: Change[]; log_entry: string; summary: string; origin?: string; error?: string; raw?: string }
 
@@ -36,6 +38,18 @@ type Props = {
 // undefined key — duplicate React keys and one shared approve-checkbox.
 function changeKey(c: Change): string {
   return c.path ?? `${c.from ?? '?'} → ${c.to ?? '?'}`
+}
+
+// Pin a change to the file version shown in its diff. A proposal stamped earlier
+// (the overnight queue) keeps its original hash; if the note has changed since,
+// say so up front — applying it would be refused anyway.
+function pinBase(c: Change, onDisk: string | null): Change {
+  if (c.baseHash === undefined) return { ...c, baseHash: onDisk }
+  if (c.baseHash === onDisk) return c
+  return {
+    ...c,
+    warnings: [...(c.warnings ?? []), 'This note changed after the proposal was made — applying it is blocked to keep your newer edits'],
+  }
 }
 
 // Review a set of proposed vault changes as per-file diffs, approve/reject each,
@@ -69,20 +83,20 @@ export function ProposalReview({ result, onApplied, onDiscard }: Props) {
             try {
               const r = await fetch(`/api/vault/file?path=${encodeURIComponent(src)}`)
               if (r.ok) {
-                const d = await r.json() as { content: string }
-                return { ...c, before: d.content }
+                const d = await r.json() as { content: string; hash: string }
+                return pinBase({ ...c, before: d.content }, d.hash)
               }
             } catch { /* ignore */ }
-            return { ...c, before: null }
+            return pinBase({ ...c, before: null }, null)
           }
           try {
             const r = await fetch(`/api/vault/file?path=${encodeURIComponent(c.path)}`)
             if (r.ok) {
-              const d = await r.json() as { content: string }
-              return { ...c, before: d.content, action: 'update' as const }
+              const d = await r.json() as { content: string; hash: string }
+              return pinBase({ ...c, before: d.content, action: 'update' as const }, d.hash)
             }
           } catch { /* not found -> create */ }
-          return { ...c, before: null, action: 'create' as const }
+          return pinBase({ ...c, before: null, action: 'create' as const }, null)
         })
       )
       if (active) {
@@ -111,14 +125,20 @@ export function ProposalReview({ result, onApplied, onDiscard }: Props) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          changes: selected.map(({ path, action, content, from, to }) => ({ path, action, content, from, to })),
+          changes: selected.map(({ path, action, content, from, to, baseHash }) => ({ path, action, content, from, to, baseHash })),
           log_entry: result.log_entry,
           origin: result.origin,
         }),
       })
-      const data = await res.json() as { written?: string[]; error?: string }
+      const data = await res.json() as { written?: string[]; errors?: string[]; error?: string }
       if (!res.ok) throw new Error(data.error ?? 'Apply failed')
-      showToast(`Saved ${data.written?.length ?? 0} file(s) to the vault`, 'success')
+      if (data.errors?.length) {
+        // Partial apply (e.g. a note changed since the proposal) — never report it as a clean save.
+        showToast(`Saved ${data.written?.length ?? 0}, skipped ${data.errors.length}: ${data.errors.join(' · ')}`, 'error')
+        if (!data.written?.length) return
+      } else {
+        showToast(`Saved ${data.written?.length ?? 0} file(s) to the vault`, 'success')
+      }
       // Let live views (e.g. the dashboard Activity Timeline) refresh immediately.
       if (typeof window !== 'undefined') window.dispatchEvent(new Event('vault:updated'))
       onApplied?.()

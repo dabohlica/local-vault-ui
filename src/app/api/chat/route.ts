@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { retrieve, retrieveNotes, indexStats, syncIndex } from '@/lib/embeddings'
+import { retrieve, retrieveNotes, indexStats, syncIndex, isIndexBusy } from '@/lib/embeddings'
 import { buildRagPrompt, buildCurationPrompt } from '@/lib/prompts'
 import { normalizeChanges } from '@/lib/healthFix'
 import { ollamaChatStream, ollamaChatStructured } from '@/lib/ollama'
@@ -56,10 +56,31 @@ export async function POST(req: NextRequest) {
     // Keep the index fresh so newly added/edited notes are answerable without a
     // manual "Sync Index". Incremental: only re-embeds changed notes (fast when
     // nothing changed). If the embed model is down, fall back to the existing index.
+    // Not while another sync/rebuild is running (the live watcher usually is the
+    // one keeping up) — then answer from the current index rather than queueing.
     let stats = indexStats()
-    if (stats.chunks > 0) {
+    if (stats.chunks > 0 && stats.modelMatches && !isIndexBusy()) {
       try { await syncIndex() } catch { /* embed model unavailable — use existing index */ }
       stats = indexStats()
+    }
+
+    // The embedding model changed (or the index predates model tracking): stored
+    // vectors are incomparable with new queries. Start the re-embed in the
+    // background and say so, instead of answering from a mismatched index.
+    // A brand-new index (no model recorded, nothing running) falls through to the
+    // empty-index help below, which explains a missing embedding model.
+    const wasBusy = isIndexBusy()
+    if (!stats.modelMatches && !wasBusy) void syncIndex().catch(() => { /* surfaced via Diagnostics */ })
+    if (!stats.modelMatches && (stats.model !== null || wasBusy)) {
+      const msg =
+        `I'm re-indexing your notes for the embedding model \`${getConfig().embedModel}\`` +
+        (stats.model ? ` (the index was built with \`${stats.model}\`)` : '') +
+        `. This runs in the background and takes a few minutes for a large vault — ask again shortly.`
+      return ndjsonStream(async (write) => {
+        write({ type: 'meta', citations: [], indexEmpty: true })
+        write({ type: 'token', v: msg })
+        write({ type: 'done', sessionId: body.sessionId })
+      })
     }
 
     // Empty index = nothing to search. This is the usual cause of "I don't know"

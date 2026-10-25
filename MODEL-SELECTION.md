@@ -148,6 +148,28 @@ comparable. After switching, click **Rebuild index** in Settings.
 
 ---
 
+## MLX models (Apple Silicon)
+
+Any model named `mlx:<hugging-face-repo>` is served by a local **MLX** server (`mlx_vlm.server`,
+OpenAI-compatible, bound to `127.0.0.1:8080`, override with `MLX_HOST`) instead of Ollama. Use this
+for models Ollama can't run on its own MLX engine. As of late 2026 that engine needs more than 32 GB
+and has no GLM vision build.
+
+**16 GB preset: GLM-4.6V-Flash (9B, 4-bit MLX, ~7 GB) + `qwen3-embedding:0.6b`.** GLM writes the
+prose and also reads images (OCR), so one generative model covers writer, librarian and vision.
+Set it up with:
+
+```bash
+scripts/install-models-16gb.sh --autostart --configure
+```
+
+That installs mlx-vlm in an isolated venv, downloads both models, runs a smoke test, starts the
+MLX server at login (`--autostart`) and points a running vault-ui at the models (`--configure`).
+Measured on an M4 / 16 GB with other apps open: OCR of a screenshot takes ~11 s. A grounded chat
+answer takes 40–75 s to the first token, dominated by prefilling ~5–7k tokens of retrieved notes at
+~110–130 tok/s. Close memory-heavy apps: once macOS starts swapping, prefill drops below
+50 tok/s. Don't keep a second large Ollama model (e.g. `gemma4`) loaded alongside it.
+
 ## How to configure it
 
 In **Settings → Local AI models**:
@@ -171,6 +193,7 @@ OLLAMA_VISION_MODEL=llama3.2-vision   # optional — image ingest
 | Machine        | Writer        | Librarian      | Embedding                       |
 | -------------- | ------------- | -------------- | ------------------------------- |
 | 8–16 GB Mac    | `qwen3.5:4b`  | `qwen3.5:4b`   | `embeddinggemma` or `qwen3-embedding:0.6b` |
+| 16 GB Mac, MLX | `mlx:mlx-community/GLM-4.6V-Flash-4bit` (one model for every role, incl. vision) | same | `qwen3-embedding:0.6b` |
 | 48 GB+ Mac     | `gemma4:12b`  | `qwen3-vl:8b`+ | `qwen3-embedding:8b`            |
 
 (Model names are illustrative and current as of June 2026 — pull whatever your Ollama

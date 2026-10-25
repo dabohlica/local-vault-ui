@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import fs from 'fs'
 import { getConfig } from '@/lib/config'
-import { OLLAMA_HOST } from '@/lib/ollama'
+import { OLLAMA_HOST, MLX_HOST, isMlxModel } from '@/lib/ollama'
 import { indexStats } from '@/lib/embeddings'
 import { countMarkdownFiles } from '@/lib/vault'
 import { vaultInitState } from '@/lib/vaultInit'
@@ -34,8 +34,20 @@ export async function GET() {
     }
   } catch { /* not running */ }
 
-  const hasModel = (want: string) =>
-    installed.some(m => m === want || m === `${want}:latest` || m.split(':')[0] === want.split(':')[0])
+  // MLX-served models ("mlx:<repo>") live outside Ollama; count them as present
+  // when the local MLX server answers (it loads the repo on first request).
+  let mlxReachable = false
+  const cfgModels = [cfg.chatModel, cfg.writerModel, cfg.librarianModel, cfg.visionModel]
+  if (cfgModels.some(isMlxModel)) {
+    try {
+      const res = await fetch(`${MLX_HOST}/health`, { signal: AbortSignal.timeout(2500), cache: 'no-store' })
+      mlxReachable = res.ok
+    } catch { /* not running */ }
+    if (mlxReachable) installed = Array.from(new Set([...installed, ...cfgModels.filter(isMlxModel)]))
+  }
+
+  const hasModel = (want: string) => isMlxModel(want) ? mlxReachable
+    : installed.some(m => m === want || m === `${want}:latest` || m.split(':')[0] === want.split(':')[0])
 
   // Index
   let chunks = 0
@@ -65,11 +77,12 @@ export async function GET() {
       librarianModel: cfg.librarianModel,
       embedModel: cfg.embedModel,
       visionModel: cfg.visionModel,
-      hasChatModel: ollamaReachable && hasModel(cfg.chatModel),
-      hasWriterModel: ollamaReachable && hasModel(cfg.writerModel),
-      hasLibrarianModel: ollamaReachable && hasModel(cfg.librarianModel),
+      hasChatModel: (ollamaReachable || isMlxModel(cfg.chatModel)) && hasModel(cfg.chatModel),
+      hasWriterModel: (ollamaReachable || isMlxModel(cfg.writerModel)) && hasModel(cfg.writerModel),
+      hasLibrarianModel: (ollamaReachable || isMlxModel(cfg.librarianModel)) && hasModel(cfg.librarianModel),
       hasEmbedModel: ollamaReachable && hasModel(cfg.embedModel),
-      hasVisionModel: ollamaReachable && hasModel(cfg.visionModel),
+      hasVisionModel: (ollamaReachable || isMlxModel(cfg.visionModel)) && hasModel(cfg.visionModel),
+      mlx: { host: MLX_HOST, reachable: mlxReachable },
       chatNumCtx: cfg.chatNumCtx,
       // True when the two roles point at the same model as chat (single-model setup).
       splitActive: cfg.writerModel !== cfg.chatModel || cfg.librarianModel !== cfg.chatModel,

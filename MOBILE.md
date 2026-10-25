@@ -27,7 +27,19 @@ cellular, a café) **without exposing anything to the public internet**.
 1. Install Tailscale on the **laptop** and the **phone** (App Store / Play Store) and sign in to the
    same account on both.
 2. On the laptop, note its Tailscale IP (`tailscale ip -4`, looks like `100.x.y.z`).
-3. Start the app **bound to all interfaces** (the default `npm run dev` only listens on localhost):
+3. Pick one:
+
+   **a) Recommended — `tailscale serve` (HTTPS, localhost keeps working):**
+
+   ```bash
+   npm run dev                       # binds 127.0.0.1 only
+   tailscale serve --bg 3000         # once; persists across restarts
+   ```
+
+   Open `https://<laptop-name>.<tailnet>.ts.net` on the phone. Real HTTPS also makes "Add to Home
+   Screen" behave like an app.
+
+   **b) Bind the Tailscale IP directly:**
 
    ```bash
    npm run dev:lan      # development
@@ -35,8 +47,8 @@ cellular, a café) **without exposing anything to the public internet**.
    npm run build && npm run start:lan
    ```
 
-   On startup it prints a banner listing every reachable URL (Tailscale, Wi-Fi/LAN, local)
-   **plus a scannable QR code** for the best one.
+   This binds **only the Tailscale IP** (not your Wi-Fi/LAN, and not localhost — use the `100.x`
+   URL on the laptop too). The banner prints the URL **plus a scannable QR code**.
 
 4. **Scan the QR with your phone's camera** — it opens the app directly. (Or type the
    `http://100.x.y.z:3000` address by hand.) That's it.
@@ -56,7 +68,8 @@ only works while the laptop is reachable.)
 
 If you only need phone access while on the **same Wi-Fi** as the laptop:
 
-1. `npm run dev:lan` (or `npm run start:lan`). The startup banner prints the `Wi-Fi/LAN` URL and a
+1. `VAULT_BIND=0.0.0.0 npm run dev:lan` — an explicit opt-in, because **anyone** on that network can then
+   use the app (read, edit and delete notes). The startup banner prints the `Wi-Fi/LAN` URL and a
    **QR code** — scan it with your phone's camera to open the app. (To find the IP manually:
    macOS `ipconfig getifaddr en0`; Windows `ipconfig` → IPv4 Address, then open
    `http://192.168.x.x:3000`.)

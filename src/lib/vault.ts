@@ -1,5 +1,6 @@
 import path from 'path'
 import fs from 'fs'
+import crypto from 'crypto'
 import { getConfig } from '@/lib/config'
 
 // Resolved at call time (not import time) so changing the vault in the UI takes
@@ -40,13 +41,66 @@ const IMAGE_FILE_RE = /\.(png|jpe?g|webp|gif)$/i
 
 export function sanitizePath(relativePath: string): string {
   // Prevent path traversal
-  const normalized = path.normalize(relativePath).replace(/^(\.\.[/\\])+/, '')
+  // (and a leading "/" — models sometimes write vault paths as "/Projects/X.md")
+  const normalized = path.normalize(relativePath).replace(/^(\.\.[/\\])+/, '').replace(/^[/\\]+/, '')
   return normalized
 }
 
+// Resolve a vault-relative path to an absolute one, refusing anything that could
+// reach outside the vault's content. Every read/write/move/delete funnels through
+// here, so this is the containment boundary for model-proposed (and possibly
+// prompt-injected) paths:
+//   - no vault configured → throw (path.join('', p) would land in the app's cwd)
+//   - the result must stay strictly inside the vault root
+//   - no dot-segments: .git/hooks/* runs on the app's git pull/push and
+//     .obsidian/plugins/* is code Obsidian executes, so neither is ever writable
 export function resolveVaultPath(relativePath: string): string {
+  const root = getVaultPath()
+  if (!root) throw new Error('No vault configured')
   const safe = sanitizePath(relativePath)
-  return path.join(getVaultPath(), safe)
+  if (safe.split(/[/\\]/).some(seg => seg.startsWith('.') && seg !== '.')) {
+    throw new Error(`Refusing hidden/system path: ${relativePath}`)
+  }
+  const base = path.resolve(root)
+  const abs = path.resolve(base, safe)
+  if (abs === base || !abs.startsWith(base + path.sep)) {
+    throw new Error(`Path escapes the vault: ${relativePath}`)
+  }
+  return abs
+}
+
+// Short content fingerprint used to detect that a note changed between when a
+// proposal was generated and when it is applied (see /api/curate/apply).
+export function contentHash(content: string): string {
+  return crypto.createHash('sha256').update(content, 'utf8').digest('hex').slice(0, 16)
+}
+
+// Fingerprint of a note as it is on disk right now; null when it doesn't exist.
+export function fileHash(relativePath: string): string | null {
+  try {
+    return contentHash(fs.readFileSync(resolveVaultPath(relativePath), 'utf-8'))
+  } catch {
+    return null
+  }
+}
+
+// The file a proposed change acts on and must find unchanged: a move's source,
+// otherwise its path.
+export function changeTarget(c: { action?: string; path?: string; from?: string }): string | undefined {
+  return c.action === 'move' ? c.from : c.path
+}
+
+// Pin each change to the version of its target the proposal was built from
+// (`known` = hashes of content the model actually saw; otherwise read from disk
+// now). null = "file didn't exist". Checked again at apply time.
+export function stampBaseHashes<T extends { action?: string; path?: string; from?: string }>(
+  changes: T[],
+  known: Map<string, string> = new Map(),
+): Array<T & { baseHash: string | null }> {
+  return changes.map(c => {
+    const target = changeTarget(c)
+    return { ...c, baseHash: target ? (known.get(target) ?? fileHash(target)) : null }
+  })
 }
 
 // Read a note's current content; null when it's missing, unreadable, or blank.

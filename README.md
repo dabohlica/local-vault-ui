@@ -33,12 +33,25 @@ caretaking, and troubleshooting.
 
 ## Security boundary (read this)
 
-**Allowed:** local inference (Ollama), local storage (SQLite), the local vault filesystem.
+**Allowed:** local inference (Ollama, or MLX via `mlx_vlm.server` for `mlx:` models), local storage
+(SQLite), the local vault filesystem.
 
 **Not allowed / not present in the codebase:** OpenAI / Anthropic / Gemini APIs, external
 vector databases, external telemetry. The only module that makes outbound HTTP requests is
-[`src/lib/ollama.ts`](src/lib/ollama.ts), and it asserts the target host is `localhost`
-(`127.0.0.1`/`::1`) before every call. Everything else is filesystem-only.
+[`src/lib/ollama.ts`](src/lib/ollama.ts), and it asserts the target host is loopback
+(`localhost`/`127.0.0.1`/`::1`) before every call. Everything else is filesystem-only.
+
+**Network access** (`src/middleware.ts`, `src/lib/access.ts`):
+- `npm run dev` / `start` bind to `127.0.0.1` only. `dev:lan` / `start:lan` bind to this machine's
+  **Tailscale IP only**, so it's reachable from your tailnet devices (governed by Tailscale ACLs), not from
+  whatever Wi-Fi you're on. `VAULT_BIND=0.0.0.0` deliberately opts back into LAN exposure.
+- Cross-site requests are blocked (Origin check), as is DNS rebinding (Host allowlist: loopback, IP
+  literals, `*.ts.net`, plus `VAULT_ALLOWED_HOSTS`). So a web page open in your browser can't drive the API.
+- The vault can't be pointed at `/`, your home folder or the app's own directory, and no path under
+  `.git/` / `.obsidian/` (or any dot-folder) is ever readable or writable through the app.
+- Applying a proposal re-checks each note's fingerprint: if it changed since the proposal was made
+  (e.g. you edited it in Obsidian before approving the overnight queue), that change is refused instead
+  of overwriting your newer text.
 
 > Vault data NEVER leaves the device.
 
@@ -213,9 +226,9 @@ different `data/index.sqlite`).
 `Logs/`, `People/`, `Knowledge/`, `Assets/`) so curation has conventions to follow. It's
 idempotent and never overwrites an existing file (`src/lib/vaultInit.ts`).
 
-**Automatic caretaking** (Settings → Step 4). While the app is open, an in-app scheduler
-(`src/components/layout/AutoCaretake.tsx`) keeps the index fresh and runs a nightly health check —
-all local:
+**Automatic caretaking** (Settings → Step 4). A server-side scheduler (`src/lib/scheduler.ts`, started
+from `src/instrumentation.ts`) keeps the index fresh and runs a nightly health check while the server
+is running — no browser tab needed. All local:
 
 - **Index sync** every *N* hours (default 6) — incremental re-embed of changed notes.
 - **Nightly full caretake** at a chosen hour (default 03:00). Two tiers — *auto-apply the safe steps,
@@ -225,15 +238,15 @@ all local:
   - **Queued for review (model-driven):** a curation proposal over the notes that changed in the last
     24h (link related notes, file strays via `move`, merge duplicates, synthesize a `Knowledge/` note
     when warranted). It is **never written unattended** — it lands in the **Review** queue.
-  - A summary is appended to `Logs/YYYY-MM-DD.md`. If the app was closed past the hour, it catches up
-    at next launch.
+  - A summary is appended to `Logs/YYYY-MM-DD.md`. If the server was down past the hour, it catches up
+    on its first check after starting (state in `data/scheduler.json`).
 
 **Review queue** (sidebar → **Review**, with a count badge). Proposals the overnight caretaker prepared
 but did not write. Open each, approve/reject the diffs (`/api/pending`, `data/pending/*.json`,
 gitignored). This keeps the propose→review→approve safety model even for unattended runs.
 
-It's a foreground scheduler, not a headless daemon — it only runs while the app is open. For
-**always-on** scheduling, point an OS cron/Task Scheduler at the same endpoint:
+It runs inside the Next.js server process, so it needs the server running (not a tab). If you don't
+keep the server up, point an OS cron/Task Scheduler at the same endpoint:
 
 ```bash
 # macOS/Linux cron — nightly full caretake at 03:00 (app or no app)
@@ -241,11 +254,13 @@ It's a foreground scheduler, not a headless daemon — it only runs while the ap
 ```
 
 `POST /api/caretake` accepts `{"mode":"sync"}` (index only) or `{"mode":"full"}` (sync + health +
-log). `GET /api/caretake` returns the current schedule. Disable the in-app scheduler any time from
-Settings.
+log). `GET /api/caretake` returns the schedule and the last nightly result. Disable the scheduler any
+time from Settings.
 
 ## Notes
 
-- Local-only tool — no auth; bind to localhost only.
+- Single-user tool: access control = loopback/Tailscale binding + Tailscale ACLs + the origin checks above.
+- Tests: `npm test` (vitest) covers path containment, origin/host checks, stale-write refusal, embedding
+  prefixes/encoding, the scheduler and model-output cleanup.
 - The embedding index (`data/`) is rebuildable and gitignored.
 - The chat model is configurable in Settings (default `qwen2.5:3b` — fast on a 16 GB machine). Larger models (e.g. `qwen2.5:7b`) give noticeably better curation/edit quality but are slower. Curation/edit output is always a proposal to review, never an autonomous write.

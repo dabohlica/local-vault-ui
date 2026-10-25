@@ -37,13 +37,21 @@ function collect() {
   return { tailscale, lan: lans[0] ?? null }
 }
 
-const { tailscale, lan } = collect()
+const detected = collect()
 const url = (host) => `http://${host}:${port}`
 
+// Mirror scripts/bind-host.mjs: by default the server binds ONLY the Tailscale IP
+// (not the Wi-Fi/LAN, not localhost). VAULT_BIND=0.0.0.0 opts back into LAN.
+const bind = process.env.VAULT_BIND || detected.tailscale || '127.0.0.1'
+const all = bind === '0.0.0.0'
+const tailscale = all || bind === detected.tailscale ? detected.tailscale : null
+const lan = all ? detected.lan : null
+
 const rows = []
-if (tailscale) rows.push(['Tailscale', url(tailscale), 'works from anywhere'])
-if (lan) rows.push(['Wi-Fi/LAN', url(lan), 'phone on the same network'])
-rows.push(['Local', url('localhost'), 'this machine'])
+if (tailscale) rows.push(['Tailscale', url(tailscale), 'your tailnet devices, from anywhere'])
+if (lan) rows.push(['Wi-Fi/LAN', url(lan), 'ANYONE on this network — VAULT_BIND=0.0.0.0'])
+if (all || bind === '127.0.0.1') rows.push(['Local', url('localhost'), 'this machine'])
+else if (!tailscale) rows.push(['Bound', url(bind), 'VAULT_BIND'])
 
 // Which URL the QR encodes. Override with VAULT_QR=tailscale|lan|local.
 const pref = (process.env.VAULT_QR || '').toLowerCase()
@@ -51,8 +59,8 @@ const qrHost =
   pref === 'tailscale' ? tailscale :
   pref === 'lan' ? lan :
   pref === 'local' ? 'localhost' :
-  tailscale || lan || 'localhost'
-const qrUrl = url(qrHost || 'localhost')
+  tailscale || lan || bind
+const qrUrl = url(qrHost || bind)
 
 const label = (s) => s.padEnd(10)
 console.log('\n  Vault UI — open on your phone:\n')
