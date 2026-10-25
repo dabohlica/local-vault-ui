@@ -141,7 +141,7 @@ if (( CONFIGURE )); then
     \"embedModel\": \"$EMBED_MODEL\",
     \"rerankModel\": \"$RERANK_MODEL\"
   }" >/dev/null && echo "Saved. The index re-embeds with $EMBED_MODEL automatically on its next sync." \
-    || echo "vault-ui isn't reachable at $APP_URL — set the models in Settings instead (see below)."
+    || echo "vault-ui isn't reachable at $APP_URL — start it (npm run dev), then re-run with --configure (downloads are skipped) or set the models in Settings."
 fi
 
 cat <<EOF
@@ -157,5 +157,7 @@ Done.
     Reranker:                            $RERANK_MODEL
 
   Changing the embedding model triggers a one-time full re-index.
-  Optional, frees ~10 GB of disk if you no longer use it:  ollama rm gemma4
 EOF
+if ollama list 2>/dev/null | awk '{print $1}' | grep -q '^gemma4'; then
+  echo "  Optional, frees ~10 GB of disk if you no longer use it:  ollama rm gemma4"
+fi
