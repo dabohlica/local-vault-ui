@@ -53,8 +53,15 @@ command -v ollama >/dev/null || die "Ollama not found — install it from https:
 # --- 1. Embedding model (Ollama) ---------------------------------------------
 say "Pulling embedding model $EMBED_MODEL"
 if ! curl -fsS http://127.0.0.1:11434/api/tags >/dev/null 2>&1; then
-  echo "Ollama isn't running — starting it in the background."
-  (ollama serve >/dev/null 2>&1 &)
+  # Prefer the app: it stays up after this shell exits and starts at login.
+  # A bare `ollama serve &` dies with the terminal, taking search with it.
+  if [[ -d /Applications/Ollama.app ]]; then
+    echo "Ollama isn't running — starting the Ollama app."
+    open -a Ollama
+  else
+    echo "Ollama isn't running — starting 'ollama serve' (keep it running, e.g. brew services start ollama)."
+    (nohup ollama serve >/dev/null 2>&1 &)
+  fi
   for _ in {1..20}; do curl -fsS http://127.0.0.1:11434/api/tags >/dev/null 2>&1 && break; sleep 1; done
 fi
 ollama pull "$EMBED_MODEL"

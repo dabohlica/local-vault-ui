@@ -79,6 +79,7 @@ export async function GET() {
       visionModel: cfg.visionModel,
       rerankModel: cfg.rerankModel,
       hasRerankModel: ollamaReachable && !!cfg.rerankModel && hasModel(cfg.rerankModel),
+      graphExpansion: cfg.graphExpansion,
       hasChatModel: (ollamaReachable || isMlxModel(cfg.chatModel)) && hasModel(cfg.chatModel),
       hasWriterModel: (ollamaReachable || isMlxModel(cfg.writerModel)) && hasModel(cfg.writerModel),
       hasLibrarianModel: (ollamaReachable || isMlxModel(cfg.librarianModel)) && hasModel(cfg.librarianModel),

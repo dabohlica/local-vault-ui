@@ -30,6 +30,10 @@ export type AppConfig = {
   // Total characters of note excerpts sent to the model per chat answer. The main
   // latency lever on small machines: prompt prefill dominates time-to-first-token.
   retrievalBudgetChars: number
+  // Graph-aware retrieval: candidates linked (via [[links]]) to the best hits get
+  // an extra fusion vote. Off until `npm run eval:retrieval` shows it helps on
+  // your vault (compare "hybrid" vs "hybrid+graph").
+  graphExpansion: boolean
   // Context window (tokens) for chat/curation requests. Bounded by TWO ceilings:
   // the model's trained max (asking beyond it degrades output) and the machine's
   // RAM/VRAM (the KV cache scales with this — too high OOMs or falls back to CPU).
@@ -69,6 +73,7 @@ function defaults(): AppConfig {
     visionModel: process.env.OLLAMA_VISION_MODEL ?? 'llama3.2-vision',
     rerankModel: process.env.OLLAMA_RERANK_MODEL ?? '',
     retrievalBudgetChars: Number(process.env.RETRIEVAL_BUDGET_CHARS) || 12000,
+    graphExpansion: process.env.GRAPH_EXPANSION === '1',
     chatNumCtx: Number(process.env.OLLAMA_NUM_CTX) || 16384,
     caretakeEnabled: true,
     caretakeHour: 3,

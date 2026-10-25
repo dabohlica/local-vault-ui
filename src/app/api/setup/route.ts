@@ -37,6 +37,7 @@ export async function POST(req: NextRequest) {
     if (body.embedModel !== undefined) patch.embedModel = body.embedModel.trim()
     if (body.visionModel !== undefined) patch.visionModel = body.visionModel.trim()
     if (body.rerankModel !== undefined) patch.rerankModel = body.rerankModel.trim()
+    if (body.graphExpansion !== undefined) patch.graphExpansion = !!body.graphExpansion
     if (body.retrievalBudgetChars !== undefined) {
       patch.retrievalBudgetChars = Math.min(60000, Math.max(3000, Math.floor(body.retrievalBudgetChars)))
     }

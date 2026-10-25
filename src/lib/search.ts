@@ -5,12 +5,15 @@ import {
 import { ollamaRerank } from '@/lib/ollama'
 import { getConfig } from '@/lib/config'
 import { readNote, stripFrontmatter } from '@/lib/vault'
+import { neighbors } from '@/lib/graph'
 
 // Retrieval pipeline over the chunk index (src/lib/embeddings.ts):
 //
 //   query ─┬─ dense (embedding cosine)      ─┐
 //          ├─ lexical (FTS5 BM25)            ├─ reciprocal-rank fusion ─ rerank (optional) ─ hits
-//          └─ title match (People/<Name>.md) ┘
+//          ├─ title match (People/<Name>.md) ┤
+//          └─ graph (opt-in: candidates linked ┘
+//             to the top notes via [[links]])
 //
 // Fusion uses ranks, not raw scores, so the three signals don't need calibrating
 // against each other. The reranker (a cross-encoder) then reads query + excerpt
@@ -47,11 +50,33 @@ function titleList(query: string, dense: ScoredId[]): number[] {
   return out
 }
 
+const GRAPH_SEEDS = 3 // top fused notes whose linked notes get the graph boost
+
+// Graph signal: the fused candidates (in fused order) whose note is linked to or
+// from one of the top-ranked notes. Only re-orders existing candidates — a linked
+// note that matched nothing isn't pulled in. Pure, for testing.
+export function graphList(
+  ranked: number[],
+  noteOf: (id: number) => string | undefined,
+  neighborsOf: (notePath: string) => Set<string>,
+  seeds = GRAPH_SEEDS,
+): number[] {
+  const seedNotes: string[] = []
+  for (const id of ranked) {
+    const p = noteOf(id)
+    if (p && !seedNotes.includes(p)) seedNotes.push(p)
+    if (seedNotes.length === seeds) break
+  }
+  const linked = new Set<string>()
+  for (const s of seedNotes) neighborsOf(s).forEach(n => linked.add(n))
+  return ranked.filter(id => linked.has(noteOf(id) ?? ''))
+}
+
 let warnedRerank = false
 
 export async function searchChunks(
   query: string,
-  opts: { mode?: SearchMode; rerank?: boolean; limit?: number } = {},
+  opts: { mode?: SearchMode; rerank?: boolean; limit?: number; graph?: boolean } = {},
 ): Promise<SearchHit[]> {
   const mode = opts.mode ?? 'hybrid'
   const limit = opts.limit ?? 20
@@ -62,8 +87,13 @@ export async function searchChunks(
   else {
     const dense = await denseSearch(query, CANDIDATES)
     const lexical = lexicalSearch(query, CANDIDATES)
-    const fused = reciprocalRankFusion([dense.map(d => d.id), lexical.map(l => l.id), titleList(query, dense)])
-    ranked = Array.from(fused, ([id, score]) => ({ id, score })).sort((a, b) => b.score - a.score)
+    const lists = [dense.map(d => d.id), lexical.map(l => l.id), titleList(query, dense)]
+    const order = (fused: Map<number, number>) => Array.from(fused, ([id, score]) => ({ id, score })).sort((a, b) => b.score - a.score)
+    ranked = order(reciprocalRankFusion(lists))
+    if (opts.graph ?? getConfig().graphExpansion) {
+      const boost = graphList(ranked.map(r => r.id), id => getChunk(id)?.notePath, neighbors)
+      if (boost.length) ranked = order(reciprocalRankFusion([...lists, boost]))
+    }
   }
 
   let hits: SearchHit[] = ranked
@@ -89,6 +119,16 @@ export async function searchChunks(
 export async function retrieve(query: string, k = 6, opts: { rerank?: boolean } = {}): Promise<RetrievedChunk[]> {
   const hits = await searchChunks(query, { limit: k, rerank: opts.rerank })
   return hits.map(h => ({ notePath: h.notePath, heading: h.heading, content: h.content, score: h.rerankScore ?? h.score }))
+}
+
+// Resolved [[link]] neighbors, so the model sees how sources relate (e.g. that
+// a meeting note links the person asked about) without spending the budget.
+function linkedNotes(notePath: string, max = 6): string[] {
+  try {
+    return Array.from(neighbors(notePath)).slice(0, max).map(p => p.replace(/\.md$/, ''))
+  } catch {
+    return []
+  }
 }
 
 // Below this size a note is sent whole: the surrounding sections cost little and
@@ -141,7 +181,7 @@ export async function retrieveContext(
       heading = noteHits.map(h => h.heading).join(' · ')
     }
     budget -= content.length
-    out.push({ notePath, heading, content, score })
+    out.push({ notePath, heading, content, score, links: linkedNotes(notePath) })
   }
   return out
 }

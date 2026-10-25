@@ -19,7 +19,10 @@ function loadClaudeMd(): string {
 
 function formatChunks(chunks: RetrievedChunk[]): string {
   return chunks
-    .map((c, i) => `### Source ${i + 1}: [[${c.notePath.replace(/\.md$/, '')}]] — ${c.heading}\n\n${c.content}`)
+    .map((c, i) => {
+      const links = c.links?.length ? `\nLinked notes: ${c.links.map(l => `[[${l}]]`).join(', ')}` : ''
+      return `### Source ${i + 1}: [[${c.notePath.replace(/\.md$/, '')}]] — ${c.heading}${links}\n\n${c.content}`
+    })
     .join('\n\n---\n\n')
 }
 

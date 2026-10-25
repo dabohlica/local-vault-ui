@@ -1,13 +1,14 @@
 import fs from 'fs'
 import { listAllNotes, resolveVaultPath, isMetaNote } from '@/lib/vault'
 import { brokenLinkTargets, buildKnownSet } from '@/lib/interlink'
+import { graphOverview } from '@/lib/graph'
 
 // Deterministic, fully-local vault structure scan. No model, no network.
 // Surfaces drift from the vault's AI-first conventions so the user can fix it.
 
 export type HealthIssue = {
   path: string
-  kind: 'missing-frontmatter' | 'missing-preamble' | 'empty' | 'broken-wikilink'
+  kind: 'missing-frontmatter' | 'missing-preamble' | 'empty' | 'broken-wikilink' | 'relation-type-mismatch' | 'orphan'
   detail: string
 }
 
@@ -60,11 +61,21 @@ export function scanVaultHealth(): HealthReport {
     }
   }
 
+  // Graph/schema checks: typed relations pointing at the wrong kind of note
+  // (related-people → a project), and notes nothing links to or from.
+  const graph = graphOverview()
+  issues.push(...graph.issues)
+  for (const p of graph.orphans) {
+    issues.push({ path: p, kind: 'orphan', detail: 'No links to or from this note — Interlink can suggest some' })
+  }
+
   const counts: HealthReport['counts'] = {
     'missing-frontmatter': 0,
     'missing-preamble': 0,
     'empty': 0,
     'broken-wikilink': 0,
+    'relation-type-mismatch': 0,
+    'orphan': 0,
   }
   for (const i of issues) counts[i.kind]++
 

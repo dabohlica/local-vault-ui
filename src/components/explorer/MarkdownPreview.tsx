@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Code2, ExternalLink, Loader2, FileText, ArrowLeft } from 'lucide-react'
+import { ConnectionsPanel } from '@/components/explorer/ConnectionsPanel'
 
 type FrontmatterData = Record<string, string | number | boolean | string[]>
 
@@ -211,6 +212,7 @@ export function MarkdownPreview({ filePath, onBack }: Props) {
         <div className="markdown-body max-w-3xl">
           <ReactMarkdown remarkPlugins={[remarkGfm]}>{renderImageEmbeds(data.body)}</ReactMarkdown>
         </div>
+        <ConnectionsPanel notePath={data.path} />
       </div>
     </div>
   )

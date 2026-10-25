@@ -14,7 +14,7 @@ type Status = {
   ollama: {
     host: string; reachable: boolean; installed: string[]
     chatModel: string; writerModel: string; librarianModel: string; embedModel: string; visionModel: string
-    rerankModel: string; hasRerankModel: boolean
+    rerankModel: string; hasRerankModel: boolean; graphExpansion: boolean
     hasChatModel: boolean; hasWriterModel: boolean; hasLibrarianModel: boolean; hasEmbedModel: boolean; hasVisionModel: boolean
     splitActive: boolean
     chatNumCtx: number
@@ -384,6 +384,18 @@ export default function SetupPage() {
                 Build <span className="font-mono">qwen3-reranker:0.6b</span> (~0.8 GB) with{' '}
                 <span className="font-mono">scripts/install-models-16gb.sh</span>.
               </p>
+              <label className="flex items-center gap-2 text-xs cursor-pointer pt-1" style={{ color: 'var(--text)' }}>
+                <input
+                  type="checkbox"
+                  checked={s.ollama.graphExpansion}
+                  onChange={e => void fetch('/api/setup', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ graphExpansion: e.target.checked }),
+                  }).then(() => refresh())}
+                />
+                Graph boost
+                <span style={{ color: 'var(--text-subtle)' }}>· rank notes linked to the best hits higher. Check with <span className="font-mono">npm run eval:retrieval</span> first.</span>
+              </label>
             </div>
 
             {/* Optional: two-model split (writer vs librarian). See MODEL-SELECTION.md. */}

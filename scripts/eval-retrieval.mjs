@@ -27,7 +27,7 @@ if (regen || status.items === 0) {
 console.log('\nScoring strategies…')
 const r = await call('POST', { action: 'run' })
 console.log(`\n${r.n} questions · embed ${r.embedModel} · rerank ${r.rerankModel || '(off)'}\n`)
-console.log('strategy        hit@1  hit@3  hit@5  MRR@10   ms/query')
+console.log('strategy             hit@1  hit@3  hit@5  MRR@10   ms/query')
 for (const [name, s] of Object.entries(r.strategies)) {
-  console.log(`${name.padEnd(15)} ${s.hit1.toFixed(2).padStart(5)}  ${s.hit3.toFixed(2).padStart(5)}  ${s.hit5.toFixed(2).padStart(5)}  ${s.mrr10.toFixed(3).padStart(6)}  ${String(s.avgMs).padStart(9)}`)
+  console.log(`${name.padEnd(20)} ${s.hit1.toFixed(2).padStart(5)}  ${s.hit3.toFixed(2).padStart(5)}  ${s.hit5.toFixed(2).padStart(5)}  ${s.mrr10.toFixed(3).padStart(6)}  ${String(s.avgMs).padStart(9)}`)
 }

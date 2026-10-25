@@ -169,6 +169,29 @@ is stored in `data/sources.json`.
 Candidates live in `data/inbox.sqlite`, **not** in the vault, so nothing you haven't kept can show up in
 chat answers or search.
 
+## Graph & note types
+
+The vault is also read as a graph ([`src/lib/graph.ts`](src/lib/graph.ts)). Notes are the nodes, and the
+edges come from two places:
+- `[[wikilinks]]` in the note body, recorded as "mentions";
+- frontmatter fields that hold links (`related-people`, `project`, `attendees`, …), recorded as edges
+  named after the field.
+
+The graph is built from the files alone, with no model and no embedder, and is refreshed incrementally.
+Note types come from `type:` in the frontmatter, or from the folder when that's missing (`People/` →
+person, `Projects/` → project…). The type vocabulary is defined in
+[`src/lib/schema.ts`](src/lib/schema.ts) and mirrors `_CLAUDE.md`.
+
+- **Explorer → Connections:** below each note, shows its typed relations, mentions, links that don't
+  resolve to a note yet, and backlinks.
+- **Health:** flags relations pointing at the wrong kind of note (for example `related-people` linking
+  a meeting) and notes with no links in or out.
+- **Chat context:** each source note is listed with its linked notes, so the model can follow
+  relationships across notes, e.g. meeting → project → person.
+- **Graph boost (Settings, off by default):** search candidates linked to the top results get an extra
+  vote in the ranking. Compare `hybrid` with `hybrid+graph` in `npm run eval:retrieval` before turning
+  it on.
+
 ## Curation conventions
 
 The curation prompt (`src/lib/prompts.ts`) loads the vault's `_CLAUDE.md` so proposed notes

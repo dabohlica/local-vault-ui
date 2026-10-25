@@ -17,7 +17,7 @@ const RESULTS_PATH = path.join(process.cwd(), 'data', 'retrieval-eval-results.js
 
 export type EvalItem = { q: string; expect: string[]; source?: string }
 export type EvalSet = { generatedAt: string; model: string; items: EvalItem[] }
-export type Strategy = 'legacy' | 'dense' | 'lexical' | 'hybrid' | 'hybrid+rerank'
+export type Strategy = 'legacy' | 'dense' | 'lexical' | 'hybrid' | 'hybrid+graph' | 'hybrid+rerank' | 'hybrid+graph+rerank'
 export type StrategyResult = { hit1: number; hit3: number; hit5: number; mrr10: number; avgMs: number }
 export type EvalResults = { ranAt: string; embedModel: string; rerankModel: string; n: number; strategies: Record<string, StrategyResult> }
 
@@ -114,18 +114,20 @@ async function rankNotes(strategy: Strategy, query: string): Promise<string[]> {
     case 'legacy': return legacyRanking(query)
     case 'dense': return notesOf((await denseSearch(query, 50)).map(d => d.id))
     case 'lexical': return notesOf(lexicalSearch(query, 50).map(l => l.id))
-    case 'hybrid': return notesOf((await searchChunks(query, { limit: 50 })).map(h => h.id))
-    case 'hybrid+rerank': return notesOf((await searchChunks(query, { limit: 20, rerank: true })).map(h => h.id))
+    case 'hybrid': return notesOf((await searchChunks(query, { limit: 50, graph: false })).map(h => h.id))
+    case 'hybrid+graph': return notesOf((await searchChunks(query, { limit: 50, graph: true })).map(h => h.id))
+    case 'hybrid+rerank': return notesOf((await searchChunks(query, { limit: 20, rerank: true, graph: false })).map(h => h.id))
+    case 'hybrid+graph+rerank': return notesOf((await searchChunks(query, { limit: 20, rerank: true, graph: true })).map(h => h.id))
   }
 }
 
 export async function runEval(
-  strategies: Strategy[] = ['legacy', 'dense', 'lexical', 'hybrid', 'hybrid+rerank'],
+  strategies: Strategy[] = ['legacy', 'dense', 'lexical', 'hybrid', 'hybrid+graph', 'hybrid+rerank', 'hybrid+graph+rerank'],
 ): Promise<EvalResults> {
   const set = readEvalSet()
   if (!set?.items.length) throw new Error('No eval set yet — generate one first.')
   const cfg = getConfig()
-  const active = strategies.filter(s => s !== 'hybrid+rerank' || cfg.rerankModel)
+  const active = strategies.filter(s => !s.endsWith('+rerank') || cfg.rerankModel)
   const out: Record<string, StrategyResult> = {}
   for (const strategy of active) {
     let hit1 = 0, hit3 = 0, hit5 = 0, mrr = 0, ms = 0

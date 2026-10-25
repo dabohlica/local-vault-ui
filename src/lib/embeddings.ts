@@ -12,6 +12,7 @@ export type RetrievedChunk = {
   heading: string
   content: string
   score: number
+  links?: string[] // linked notes (paths sans .md), for chat context
 }
 
 // Bump when the way chunks are turned into vectors changes (prefix rules,

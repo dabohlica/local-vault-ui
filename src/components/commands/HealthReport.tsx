@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Loader2, Activity, AlertTriangle, FileWarning, Link2Off, FileX, CheckCircle2, Wand2 } from 'lucide-react'
+import { Loader2, Activity, AlertTriangle, FileWarning, Link2Off, FileX, CheckCircle2, Wand2, Unlink, Waypoints } from 'lucide-react'
 import { ProposalReview, type ProposalResponse } from '@/components/shared/ProposalReview'
 
 type Issue = { path: string; kind: string; detail: string }
@@ -18,6 +18,8 @@ const KIND_META: Record<string, { label: string; icon: React.ElementType }> = {
   'missing-preamble': { label: 'Missing "For future Claude" preamble', icon: AlertTriangle },
   'empty': { label: 'Empty notes', icon: FileX },
   'broken-wikilink': { label: 'Broken wikilinks', icon: Link2Off },
+  'relation-type-mismatch': { label: 'Relations to the wrong note type', icon: Waypoints },
+  'orphan': { label: 'Unconnected notes', icon: Unlink },
 }
 
 export function HealthReport() {
