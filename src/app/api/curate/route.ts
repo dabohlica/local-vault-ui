@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { retrieve } from '@/lib/embeddings'
+import { retrieve } from '@/lib/search'
 import { buildCurationPrompt } from '@/lib/prompts'
 import { ollamaChatStructured } from '@/lib/ollama'
 import { normalizeChanges } from '@/lib/healthFix'

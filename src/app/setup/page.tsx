@@ -14,6 +14,7 @@ type Status = {
   ollama: {
     host: string; reachable: boolean; installed: string[]
     chatModel: string; writerModel: string; librarianModel: string; embedModel: string; visionModel: string
+    rerankModel: string; hasRerankModel: boolean
     hasChatModel: boolean; hasWriterModel: boolean; hasLibrarianModel: boolean; hasEmbedModel: boolean; hasVisionModel: boolean
     splitActive: boolean
     chatNumCtx: number
@@ -353,6 +354,37 @@ export default function SetupPage() {
             <ModelPicker role="visionModel" label="Vision model" optional current={s.ollama.visionModel} ok={s.ollama.hasVisionModel}
               installed={s.ollama.installed} active={pullingRole === 'visionModel'} pulling={pulling} pullMsg={pullMsg} pullPct={pullPct}
               onSelect={(m) => void saveModel('visionModel', m)} onPull={(m) => pullModel(m, 'visionModel')} />
+
+            {/* Optional cross-encoder reranker (lib/search.ts). Built locally by
+                scripts/install-models-16gb.sh — not a plain pull: community uploads
+                of Qwen3-Reranker lack the yes/no head it scores with. */}
+            <div className="rounded-lg px-3 py-2.5 flex flex-col gap-2" style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}>
+              <div className="flex items-center gap-2">
+                {s.ollama.hasRerankModel ? <CheckCircle2 size={15} style={{ color: 'var(--success)' }} />
+                  : <XCircle size={15} style={{ color: 'var(--text-subtle)' }} />}
+                <span className="text-xs flex-1" style={{ color: 'var(--text-muted)' }}>
+                  Reranker<span style={{ color: 'var(--text-subtle)' }}> · optional, sharper search results</span>
+                </span>
+              </div>
+              <select
+                value={s.ollama.rerankModel}
+                onChange={e => void fetch('/api/setup', {
+                  method: 'POST', headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ rerankModel: e.target.value }),
+                }).then(() => refresh())}
+                className="text-sm rounded-lg px-2.5 py-1.5 outline-none font-mono min-w-0 max-w-full"
+                style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text)' }}
+              >
+                <option value="">Off (hybrid ranking only)</option>
+                {Array.from(new Set([s.ollama.rerankModel, ...s.ollama.installed.filter(m => /rerank/i.test(m))].filter(Boolean))).map(m => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
+              </select>
+              <p className="text-xs" style={{ color: 'var(--text-subtle)' }}>
+                Build <span className="font-mono">qwen3-reranker:0.6b</span> (~0.8 GB) with{' '}
+                <span className="font-mono">scripts/install-models-16gb.sh</span>.
+              </p>
+            </div>
 
             {/* Optional: two-model split (writer vs librarian). See MODEL-SELECTION.md. */}
             <div className="rounded-lg px-3 py-2.5 flex flex-col gap-2" style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}>

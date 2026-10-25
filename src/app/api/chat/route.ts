@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { retrieve, retrieveNotes, indexStats, syncIndex, isIndexBusy } from '@/lib/embeddings'
+import { indexStats, syncIndex, isIndexBusy } from '@/lib/embeddings'
+import { retrieve, retrieveContext } from '@/lib/search'
 import { buildRagPrompt, buildCurationPrompt } from '@/lib/prompts'
 import { normalizeChanges } from '@/lib/healthFix'
 import { ollamaChatStream, ollamaChatStructured } from '@/lib/ollama'
@@ -116,7 +117,7 @@ export async function POST(req: NextRequest) {
     // Uses light chunk-level context (not full notes) — a small model produces clean
     // JSON only with a bounded prompt; full-note context overflows it.
     if (body.mode === 'edit') {
-      const editChunks = await retrieve(retrievalQuery, 6)
+      const editChunks = await retrieve(retrievalQuery, 6, { rerank: true })
       const editCitations = Array.from(
         new Map(editChunks.map(c => [c.notePath, { path: c.notePath, heading: c.heading }])).values()
       )
@@ -151,11 +152,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ mode: 'edit', changes: result.changes, log_entry: result.log_entry, summary: result.summary, citations: editCitations, sessionId: sid })
     }
 
-    // ASK MODE — grounded answer over full-note hybrid retrieval, streamed token by
+    // ASK MODE — grounded answer over hybrid + reranked retrieval, streamed token by
     // token. Retrieval runs inside the stream so an embed-model failure surfaces as
     // an in-stream error event rather than a mismatched JSON response.
     return ndjsonStream(async (write) => {
-      const chunks = await retrieveNotes(retrievalQuery, { topNotes: 7, perNoteChars: 6000 })
+      // Budgeted, note-grouped excerpts (whole note when small) — see lib/search.ts.
+      const chunks = await retrieveContext(retrievalQuery)
       // When a retrieved note embeds images (e.g. an OCR'd Knowledge/Images note
       // matched the query), pass their paths along so the client can show them —
       // "retrieve the file on match", not just the note that mentions it.

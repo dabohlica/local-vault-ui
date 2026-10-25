@@ -128,7 +128,9 @@ strong embedding model  →  good reranker  →  librarian  →  writer
 ```
 
 If you're going to invest effort, invest it in the **embedding model** (`embedModel`)
-and retrieval quality first. Note linking, topic discovery, and "find related
+and retrieval quality first. This app now does both stages: hybrid retrieval plus an optional
+**reranker** (`rerankModel`, e.g. `qwen3-reranker:0.6b`). On the reference vault the reranker took hit@1
+from 0.82 to 0.96. Run `npm run eval:retrieval` to measure any model change on your own notes. Note linking, topic discovery, and "find related
 concepts" depend more on retrieval than on the generator. Strong options as of
 mid-2026, all pullable from Ollama:
 
@@ -166,8 +168,8 @@ scripts/install-models-16gb.sh --autostart --configure
 That installs mlx-vlm in an isolated venv, downloads both models, runs a smoke test, starts the
 MLX server at login (`--autostart`) and points a running vault-ui at the models (`--configure`).
 Measured on an M4 / 16 GB with other apps open: OCR of a screenshot takes ~11 s. A grounded chat
-answer takes 40–75 s to the first token, dominated by prefilling ~5–7k tokens of retrieved notes at
-~110–130 tok/s. Close memory-heavy apps: once macOS starts swapping, prefill drops below
+answer takes ~15–30 s to the first token (warm): ~3–4 s of retrieval and reranking, then prefilling a
+~2k-token prompt at ~140 tok/s. Close memory-heavy apps: once macOS starts swapping, prefill drops below
 50 tok/s. Don't keep a second large Ollama model (e.g. `gemma4`) loaded alongside it.
 
 ## How to configure it
@@ -193,7 +195,7 @@ OLLAMA_VISION_MODEL=llama3.2-vision   # optional — image ingest
 | Machine        | Writer        | Librarian      | Embedding                       |
 | -------------- | ------------- | -------------- | ------------------------------- |
 | 8–16 GB Mac    | `qwen3.5:4b`  | `qwen3.5:4b`   | `embeddinggemma` or `qwen3-embedding:0.6b` |
-| 16 GB Mac, MLX | `mlx:mlx-community/GLM-4.6V-Flash-4bit` (one model for every role, incl. vision) | same | `qwen3-embedding:0.6b` |
+| 16 GB Mac, MLX | `mlx:mlx-community/GLM-4.6V-Flash-4bit` (one model for every role, incl. vision) | same | `qwen3-embedding:0.6b` + reranker `qwen3-reranker:0.6b` |
 | 48 GB+ Mac     | `gemma4:12b`  | `qwen3-vl:8b`+ | `qwen3-embedding:8b`            |
 
 (Model names are illustrative and current as of June 2026 — pull whatever your Ollama

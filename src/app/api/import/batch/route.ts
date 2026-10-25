@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import path from 'path'
 import { extractDocs, type ExtractedDoc } from '@/lib/extract'
-import { retrieve } from '@/lib/embeddings'
+import { retrieve } from '@/lib/search'
 import { buildIngestPrompt } from '@/lib/prompts'
 import { ollamaChatStructured } from '@/lib/ollama'
 

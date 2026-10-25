@@ -77,6 +77,8 @@ export async function GET() {
       librarianModel: cfg.librarianModel,
       embedModel: cfg.embedModel,
       visionModel: cfg.visionModel,
+      rerankModel: cfg.rerankModel,
+      hasRerankModel: ollamaReachable && !!cfg.rerankModel && hasModel(cfg.rerankModel),
       hasChatModel: (ollamaReachable || isMlxModel(cfg.chatModel)) && hasModel(cfg.chatModel),
       hasWriterModel: (ollamaReachable || isMlxModel(cfg.writerModel)) && hasModel(cfg.writerModel),
       hasLibrarianModel: (ollamaReachable || isMlxModel(cfg.librarianModel)) && hasModel(cfg.librarianModel),

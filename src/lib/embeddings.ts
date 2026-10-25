@@ -15,8 +15,9 @@ export type RetrievedChunk = {
 }
 
 // Bump when the way chunks are turned into vectors changes (prefix rules,
-// normalization) — like a model change, it makes stored vectors incomparable.
-const EMBED_SCHEME = 'v2'
+// normalization, chunk headers) — like a model change, it makes stored vectors
+// incomparable and triggers a full re-embed. v3: breadcrumb chunk headers.
+const EMBED_SCHEME = 'v3'
 
 // Search-tuned embedders are trained with distinct query/document prefixes and
 // lose a lot of accuracy without them. The prefix is applied at embed time only;
@@ -81,8 +82,25 @@ function getDb(): Database.Database {
     );
     CREATE INDEX IF NOT EXISTS idx_chunks_note_path ON chunks(note_path);
     CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+    -- Keyword (BM25) index over the same chunks; rowid = chunks.id. unicode61 with
+    -- diacritics folded so "Muller" finds "Müller" and vice versa.
+    CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(
+      title, heading, content, tokenize = 'unicode61 remove_diacritics 2'
+    );
   `)
+  // Backfill/repair the keyword index if it drifted from the chunks table (e.g. an
+  // index created before it existed). Cheap: plain text copy, no embedding.
+  const counts = db.prepare('SELECT (SELECT COUNT(*) FROM chunks) AS c, (SELECT COUNT(*) FROM chunks_fts) AS f').get() as { c: number; f: number }
+  if (counts.c !== counts.f) {
+    db.exec(`DELETE FROM chunks_fts;
+      INSERT INTO chunks_fts (rowid, title, heading, content)
+        SELECT id, replace(note_path, '.md', ''), heading, content FROM chunks;`)
+  }
   return db
+}
+
+function clearIndex(database: Database.Database): void {
+  database.exec('DELETE FROM chunks; DELETE FROM chunks_fts;')
 }
 
 function getMeta(key: string): string | null {
@@ -104,10 +122,11 @@ type IndexGlobals = {
 type VectorCache = {
   signature: string
   dim: number
+  ids: number[]
+  rowOf: Map<number, number> // chunk id → row in the arrays below
   notePaths: string[]
   headings: string[]
   contents: string[]
-  lowered: string[]
   vecs: Float32Array // n × dim, row-major, normalized
 }
 const G = ((globalThis as unknown as { __vaultIndex?: IndexGlobals }).__vaultIndex ??= { lock: Promise.resolve(), pending: 0, cache: null })
@@ -135,8 +154,8 @@ export function isIndexBusy(): boolean {
 function loadCache(): VectorCache {
   const signature = getMeta('signature') ?? ''
   if (G.cache && G.cache.signature === signature) return G.cache
-  const rows = getDb().prepare('SELECT note_path, heading, content, embedding FROM chunks').all() as Array<{
-    note_path: string; heading: string; content: string; embedding: Buffer
+  const rows = getDb().prepare('SELECT id, note_path, heading, content, embedding FROM chunks ORDER BY id').all() as Array<{
+    id: number; note_path: string; heading: string; content: string; embedding: Buffer
   }>
   const dim = rows.length ? rows[0].embedding.byteLength / 4 : 0
   const kept = rows.filter(r => r.embedding.byteLength === dim * 4)
@@ -145,10 +164,11 @@ function loadCache(): VectorCache {
   G.cache = {
     signature,
     dim,
+    ids: kept.map(r => r.id),
+    rowOf: new Map(kept.map((r, i) => [r.id, i])),
     notePaths: kept.map(r => r.note_path),
     headings: kept.map(r => r.heading),
     contents: kept.map(r => r.content),
-    lowered: kept.map(r => r.content.toLowerCase()),
     vecs,
   }
   return G.cache
@@ -185,6 +205,105 @@ async function scoreAll(query: string): Promise<{ cache: VectorCache; scores: Fl
     scores[i] = dot
   }
   return { cache, scores }
+}
+
+export type IndexedChunk = { id: number; notePath: string; heading: string; content: string }
+export type ScoredId = { id: number; score: number }
+
+function chunkAt(cache: VectorCache, row: number): IndexedChunk {
+  return { id: cache.ids[row], notePath: cache.notePaths[row], heading: cache.headings[row], content: cache.contents[row] }
+}
+
+export function getChunk(id: number): IndexedChunk | undefined {
+  const cache = loadCache()
+  const row = cache.rowOf.get(id)
+  return row === undefined ? undefined : chunkAt(cache, row)
+}
+
+// A note's chunks in document order (ids are assigned in chunk order per note).
+export function chunksOfNote(notePath: string): IndexedChunk[] {
+  const cache = loadCache()
+  const out: IndexedChunk[] = []
+  for (let i = 0; i < cache.ids.length; i++) if (cache.notePaths[i] === notePath) out.push(chunkAt(cache, i))
+  return out
+}
+
+// Semantic ranking: chunk ids by cosine similarity to the query, best first.
+export async function denseSearch(query: string, limit = 50): Promise<ScoredId[]> {
+  const { cache, scores } = await scoreAll(query)
+  return Array.from(scores.keys())
+    .sort((a, b) => scores[b] - scores[a])
+    .slice(0, limit)
+    .map(i => ({ id: cache.ids[i], score: scores[i] }))
+}
+
+const STOPWORDS = new Set([
+  // English
+  'the', 'a', 'an', 'and', 'or', 'of', 'to', 'in', 'on', 'for', 'is', 'are', 'was', 'were', 'be',
+  'what', 'who', 'whom', 'whose', 'which', 'when', 'where', 'why', 'how', 'do', 'does', 'did', 'tell',
+  'me', 'about', 'i', 'you', 'it', 'its', 'this', 'that', 'these', 'those', 'his', 'her', 'their',
+  'they', 'he', 'she', 'we', 'my', 'your', 'with', 'know', 'can', 'please', 'give', 'show', 'have',
+  'from', 'any', 'all', 'there', 'has', 'had', 'not', 'but', 'our', 'into', 'than', 'then',
+  // German (the vault mixes both)
+  'der', 'die', 'das', 'den', 'dem', 'des', 'und', 'oder', 'ist', 'sind', 'war', 'wer', 'was', 'wie',
+  'wo', 'wann', 'warum', 'welche', 'welcher', 'welches', 'mit', 'für', 'von', 'zu', 'zum', 'zur', 'im',
+  'ein', 'eine', 'einen', 'einem', 'einer', 'ich', 'du', 'er', 'sie', 'es', 'wir', 'ihr', 'mein',
+  'meine', 'dein', 'auf', 'aus', 'bei', 'nach', 'über', 'auch', 'nicht', 'noch', 'mir', 'mich', 'uns',
+])
+
+// Meaningful query terms for keyword matching (drops stopwords/short tokens).
+export function queryTerms(text: string): string[] {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const raw of text.toLowerCase().split(/[^0-9a-z\u00c0-\u024f]+/)) {
+    if (raw.length < 3 || STOPWORDS.has(raw) || seen.has(raw)) continue
+    seen.add(raw); out.push(raw)
+  }
+  return out
+}
+
+// FTS5 MATCH expression: any term (OR), each quoted so user text can't inject
+// FTS syntax; terms of 4+ chars also match as prefixes (plurals, German compounds).
+export function ftsQuery(terms: string[]): string {
+  return terms.map(t => `"${t.replace(/"/g, '""')}"${t.length >= 4 ? '*' : ''}`).join(' OR ')
+}
+
+// Keyword ranking: BM25 over title (note path), heading and content, weighted so
+// a hit in the note's name/heading counts more than one in body text.
+export function lexicalSearch(query: string, limit = 50): ScoredId[] {
+  const terms = queryTerms(query)
+  if (terms.length === 0) return []
+  const rows = getDb().prepare(
+    'SELECT rowid AS id, bm25(chunks_fts, 4.0, 2.0, 1.0) AS rank FROM chunks_fts WHERE chunks_fts MATCH ? ORDER BY rank LIMIT ?'
+  ).all(ftsQuery(terms), limit) as Array<{ id: number; rank: number }>
+  return rows.map(r => ({ id: r.id, score: -r.rank })) // bm25(): lower is better
+}
+
+// Notes the query names explicitly — the strongest signal for named entities
+// ("who is Alex" → People/Alex.md), which embed poorly and whose names also
+// appear in the body of many other notes. Deliberately strict: a note matches
+// only if the query contains ALL words of its file name, or — for person notes
+// (People/, Contacts/…) — the first name, AND those name words make up at least
+// half of the query's meaningful words, i.e. the query is ABOUT that note
+// ("who is Alex"), not a longer question that merely mentions it. Looser rules
+// (any query word as a substring of a file name; any full-title mention)
+// measurably hurt ranking on descriptive questions in the retrieval eval.
+const PERSON_DIR = /(^|\/)(people|persons|contacts|personen|kontakte)\//i
+
+export function titleMatches(query: string): Array<{ notePath: string; score: number }> {
+  const terms = new Set(queryTerms(query))
+  if (terms.size === 0) return []
+  const cache = loadCache()
+  const out: Array<{ notePath: string; score: number }> = []
+  for (const notePath of Array.from(new Set(cache.notePaths))) {
+    const words = queryTerms(path.basename(notePath, '.md'))
+    if (words.length === 0) continue
+    const present = words.filter(w => terms.has(w)).length
+    const named = present === words.length || (PERSON_DIR.test(notePath) && terms.has(words[0]))
+    const coverage = present / terms.size
+    if (named && coverage >= 0.5) out.push({ notePath, score: coverage })
+  }
+  return out.sort((a, b) => b.score - a.score)
 }
 
 // Target max characters per chunk. Embedding models have a fixed context window
@@ -229,25 +348,33 @@ function splitText(text: string, maxLen: number, overlap = CHUNK_OVERLAP_CHARS):
   return out
 }
 
-// Split a note into size-bounded chunks. Each chunk is prefixed with a short
-// "<note title> — <heading>" header for context, NOT the full frontmatter:
-// prepending identical frontmatter to every chunk pulls their embeddings toward
-// frontmatter similarity (so unrelated daily/log notes mis-match), and crowds out
-// the actual prose. The header keeps just enough context to stay self-locating.
+// Split a note into size-bounded chunks. Each chunk is prefixed with a breadcrumb
+// "<folder/note> › <parent heading> › <heading>" for context, NOT the full
+// frontmatter: prepending identical frontmatter to every chunk pulls their
+// embeddings toward frontmatter similarity (so unrelated daily/log notes
+// mis-match), and crowds out the actual prose. The breadcrumb keeps each chunk
+// self-locating — the folder says what kind of note it is (People/, Projects/),
+// the parent heading says what a terse "### Status" section is the status of.
 export function chunkNote(notePath: string, content: string): Array<{ heading: string; content: string }> {
   const body = stripFrontmatter(content)
-  const title = path.basename(notePath).replace(/\.md$/, '')
+  const title = notePath.replace(/\.md$/, '')
 
-  const budget = Math.max(500, MAX_CHUNK_CHARS - title.length - 40)
   const sections = body.split(/\n(?=#{1,6}\s)/)
   const chunks: Array<{ heading: string; content: string }> = []
+  const trail: string[] = [] // heading text by level (index 0 = "#")
 
   const pushSection = (raw: string) => {
     const trimmed = raw.trim()
     if (!trimmed) return
     const headingMatch = /^(#{1,6})\s+(.*)/.exec(trimmed)
+    if (headingMatch) {
+      const level = headingMatch[1].length
+      trail.length = level - 1
+      trail[level - 1] = headingMatch[2].trim()
+    }
     const heading = headingMatch ? headingMatch[2].trim() : '(intro)'
-    const header = heading === '(intro)' ? title : `${title} — ${heading}`
+    const header = [title, ...(headingMatch ? trail.filter(Boolean) : [])].join(' › ')
+    const budget = Math.max(500, MAX_CHUNK_CHARS - header.length - 2)
     for (const piece of splitText(trimmed, budget)) {
       chunks.push({ heading, content: `${header}\n\n${piece}` })
     }
@@ -263,7 +390,7 @@ type IndexRun = { notes: number; chunks: number; skipped: string[] }
 
 export function rebuildIndex(): Promise<IndexRun> {
   return withIndexLock(async () => {
-    getDb().exec('DELETE FROM chunks')
+    clearIndex(getDb())
     setMeta('signature', embedSignature())
     invalidateCache()
     return embedNotes(listAllNotes().map(f => f.path))
@@ -273,7 +400,7 @@ export function rebuildIndex(): Promise<IndexRun> {
 // Drop all chunks without re-embedding — used when switching to a different vault
 // so stale chunks from the previous vault can't leak into retrieval.
 export function resetIndex(): void {
-  getDb().exec('DELETE FROM chunks')
+  clearIndex(getDb())
   invalidateCache()
 }
 
@@ -285,7 +412,7 @@ export function syncIndex(): Promise<IndexRun> {
     const database = getDb()
     const signature = embedSignature()
     if (getMeta('signature') !== signature) {
-      database.exec('DELETE FROM chunks')
+      clearIndex(database)
       setMeta('signature', signature)
       invalidateCache()
     }
@@ -303,10 +430,10 @@ export function syncIndex(): Promise<IndexRun> {
 
     // Prune chunks for notes that no longer exist in the vault (deleted/renamed).
     const present = new Set(notes.map(n => n.path))
-    const del = database.prepare('DELETE FROM chunks WHERE note_path = ?')
+    const del = deleteNoteRows(database)
     let pruned = 0
     for (const p of Array.from(indexedAt.keys())) {
-      if (!present.has(p)) { del.run(p); pruned++ }
+      if (!present.has(p)) { del(p); pruned++ }
     }
     if (pruned) invalidateCache()
 
@@ -347,19 +474,31 @@ async function embedResilient(text: string, prefix: string): Promise<Array<{ tex
   }
 }
 
+// Remove a note's chunks from both the vector table and the keyword index.
+function deleteNoteRows(database: Database.Database): (notePath: string) => void {
+  const delFts = database.prepare('DELETE FROM chunks_fts WHERE rowid IN (SELECT id FROM chunks WHERE note_path = ?)')
+  const del = database.prepare('DELETE FROM chunks WHERE note_path = ?')
+  return (notePath) => { delFts.run(notePath); del.run(notePath) }
+}
+
 // Callers must hold the index lock.
 async function embedNotes(notePaths: string[]): Promise<IndexRun> {
   const database = getDb()
   const insert = database.prepare(
     'INSERT INTO chunks (note_path, heading, content, embedding, updated_at) VALUES (?, ?, ?, ?, ?)'
   )
-  const del = database.prepare('DELETE FROM chunks WHERE note_path = ?')
+  const insertFts = database.prepare('INSERT INTO chunks_fts (rowid, title, heading, content) VALUES (?, ?, ?, ?)')
+  const del = deleteNoteRows(database)
   // Swap a note's chunks atomically: its old chunks stay searchable until the
   // new ones are fully embedded, and a failure mid-note leaves the old ones.
   const replaceNote = database.transaction(
     (notePath: string, rows: Array<{ heading: string; text: string; embedding: number[] }>, mtime: number) => {
-      del.run(notePath)
-      for (const r of rows) insert.run(notePath, r.heading, r.text, encodeVector(r.embedding), mtime)
+      del(notePath)
+      const title = notePath.replace(/\.md$/, '')
+      for (const r of rows) {
+        const { lastInsertRowid } = insert.run(notePath, r.heading, r.text, encodeVector(r.embedding), mtime)
+        insertFts.run(lastInsertRowid, title, r.heading, r.text)
+      }
     },
   )
   const { doc: docPrefix } = embedPrefixes(getConfig().embedModel)
@@ -400,103 +539,6 @@ async function embedNotes(notePaths: string[]): Promise<IndexRun> {
 
   if (notePaths.length) invalidateCache()
   return { notes: notePaths.length, chunks: chunkCount, skipped }
-}
-
-export async function retrieve(query: string, k = 6): Promise<RetrievedChunk[]> {
-  const { cache, scores } = await scoreAll(query)
-  const order = Array.from(scores.keys()).sort((a, b) => scores[b] - scores[a]).slice(0, k)
-  return order.map(i => ({
-    notePath: cache.notePaths[i],
-    heading: cache.headings[i],
-    content: cache.contents[i],
-    score: scores[i],
-  }))
-}
-
-const STOPWORDS = new Set([
-  'the', 'a', 'an', 'and', 'or', 'of', 'to', 'in', 'on', 'for', 'is', 'are', 'was', 'were', 'be',
-  'what', 'who', 'whom', 'whose', 'which', 'when', 'where', 'why', 'how', 'do', 'does', 'did', 'tell',
-  'me', 'about', 'i', 'you', 'it', 'its', 'this', 'that', 'these', 'those', 'his', 'her', 'their',
-  'they', 'he', 'she', 'we', 'my', 'your', 'with', 'know', 'can', 'please', 'give', 'show', 'have',
-])
-
-// Meaningful query terms for lexical matching (drops stopwords/short tokens).
-function queryTerms(text: string): string[] {
-  const seen = new Set<string>()
-  const out: string[] = []
-  for (const raw of text.toLowerCase().split(/[^a-z0-9äöüß]+/)) {
-    if (raw.length < 3 || STOPWORDS.has(raw) || seen.has(raw)) continue
-    seen.add(raw); out.push(raw)
-  }
-  return out
-}
-
-function titleOf(notePath: string): string {
-  return path.basename(notePath).replace(/\.md$/, '')
-}
-
-// Hybrid note-level retrieval: combine semantic similarity with a lexical/keyword
-// signal and a strong title-match boost, then return FULL note content for the top
-// notes. The lexical + title signals are what make "tell me about <Person>" surface
-// the note literally named/containing that person — pure embedding similarity ranks
-// short named-entity queries poorly and was the cause of false "I don't know"s.
-export async function retrieveNotes(
-  query: string,
-  opts: { topNotes?: number; perNoteChars?: number } = {}
-): Promise<RetrievedChunk[]> {
-  const topNotes = opts.topNotes ?? 7
-  const perNoteChars = opts.perNoteChars ?? 6000
-
-  const { cache, scores } = await scoreAll(query)
-  const terms = queryTerms(query)
-
-  // Per note: best semantic score + accumulated lexical hits across its chunks.
-  const sem = new Map<string, number>()
-  const lex = new Map<string, number>()
-  for (let i = 0; i < cache.notePaths.length; i++) {
-    const notePath = cache.notePaths[i]
-    const score = scores[i]
-    if ((sem.get(notePath) ?? -1) < score) sem.set(notePath, score)
-    if (terms.length) {
-      const hay = cache.lowered[i]
-      let hits = 0
-      for (const t of terms) if (hay.includes(t)) hits++
-      if (hits) lex.set(notePath, (lex.get(notePath) ?? 0) + hits)
-    }
-  }
-
-  // Combine into a single score per note.
-  const notePaths = new Set<string>([...Array.from(sem.keys()), ...Array.from(lex.keys())])
-  const combined: Array<{ notePath: string; score: number }> = []
-  for (const notePath of Array.from(notePaths)) {
-    const s = sem.get(notePath) ?? 0
-    const lexNorm = Math.min(1, (lex.get(notePath) ?? 0) / Math.max(1, terms.length)) // fraction of terms present
-    // Title containing a query term is the strongest signal (e.g. People/<Name>.md).
-    const title = titleOf(notePath).toLowerCase()
-    const titleHit = terms.some(t => title.includes(t))
-    const score = s + 0.5 * lexNorm + (titleHit ? 0.6 : 0)
-    combined.push({ notePath, score })
-  }
-  combined.sort((a, b) => b.score - a.score)
-
-  const out: RetrievedChunk[] = []
-  const seen = new Set<string>() // dedup identical-content notes (duplicate imports)
-  for (const { notePath, score } of combined) {
-    if (out.length >= topNotes) break
-    let raw: string
-    try {
-      raw = fs.readFileSync(resolveVaultPath(notePath), 'utf-8')
-    } catch {
-      continue
-    }
-    const body = stripFrontmatter(raw).trim()
-    if (!body) continue
-    const key = body.slice(0, 400) // cheap near-duplicate key
-    if (seen.has(key)) continue
-    seen.add(key)
-    out.push({ notePath, heading: '(full note)', content: body.slice(0, perNoteChars), score })
-  }
-  return out
 }
 
 // Distinct note paths currently present in the index — used by diagnostics to

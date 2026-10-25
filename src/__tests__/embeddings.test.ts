@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { embedPrefixes, embedSignature, encodeVector, decodeVector, chunkNote } from '@/lib/embeddings'
+import { embedPrefixes, embedSignature, encodeVector, decodeVector, chunkNote, queryTerms, ftsQuery } from '@/lib/embeddings'
 
 describe('embedding prefixes', () => {
   it('uses asymmetric query/document prefixes for search-tuned models', () => {
@@ -26,9 +26,22 @@ describe('vector encoding', () => {
 })
 
 describe('chunkNote', () => {
-  it('splits by heading with a self-locating header', () => {
-    const chunks = chunkNote('People/Ada.md', '---\ntype: person\n---\nIntro\n## Work\nAnalytical engine')
-    expect(chunks.map(c => c.heading)).toEqual(['(intro)', 'Work'])
-    expect(chunks[1].content.startsWith('Ada — Work')).toBe(true)
+  it('splits by heading with a breadcrumb header (path › parent › heading)', () => {
+    const chunks = chunkNote('People/Ada.md', '---\ntype: person\n---\nIntro\n## Work\nAnalytical engine\n### Status\nActive\n## Life\nLondon')
+    expect(chunks.map(c => c.heading)).toEqual(['(intro)', 'Work', 'Status', 'Life'])
+    expect(chunks[0].content.startsWith('People/Ada\n')).toBe(true)
+    expect(chunks[2].content.startsWith('People/Ada › Work › Status\n')).toBe(true)
+    expect(chunks[3].content.startsWith('People/Ada › Life\n')).toBe(true) // sibling resets the trail
+  })
+})
+
+describe('keyword query building', () => {
+  it('drops English/German stopwords and keeps umlauts', () => {
+    expect(queryTerms('Wer ist der Ansprechpartner für das Energieaudit bei Müller?')).toEqual(['ansprechpartner', 'energieaudit', 'müller'])
+    expect(queryTerms('who is Christopher Kopp')).toEqual(['christopher', 'kopp'])
+  })
+  it('quotes terms (no FTS syntax injection) and prefix-matches longer ones', () => {
+    expect(ftsQuery(['kopp', 'ai'])).toBe('"kopp"* OR "ai"')
+    expect(ftsQuery(['a"b OR c'])).toBe('"a""b OR c"*')
   })
 })

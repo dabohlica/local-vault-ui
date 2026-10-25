@@ -1,17 +1,18 @@
 #!/usr/bin/env bash
 # Model setup for a 16 GB Apple-Silicon Mac (e.g. MacBook Air M-series).
 #
-#   Embeddings  → qwen3-embedding:0.6b via Ollama          (~0.6 GB)
-#   Prose/vision → GLM-4.6V-Flash 4-bit via MLX (mlx-vlm)  (~7 GB, reads images)
+#   Embeddings   → qwen3-embedding:0.6b via Ollama          (~1 GB loaded)
+#   Reranker     → qwen3-reranker:0.6b via Ollama (int8)    (~0.8 GB, built locally)
+#   Prose/vision → GLM-4.6V-Flash 4-bit via MLX (mlx-vlm)   (~7 GB, reads images)
 #
 # Why two runtimes: Ollama's MLX engine needs >32 GB unified memory and has no GLM
 # vision build, so the GLM model runs on Apple's MLX directly (mlx_vlm.server, an
 # OpenAI-compatible server bound to 127.0.0.1). vault-ui routes any model named
 # "mlx:<repo>" to it; everything stays on this machine.
 #
-# Memory budget (approx.): GLM 4-bit ~7 GB + KV cache ~0.7 GB + embedder ~0.7 GB
-# ≈ 8.5 GB — inside macOS's default GPU limit (~10.7 GB on 16 GB). Don't keep a
-# second large Ollama model (e.g. gemma4) loaded at the same time.
+# Memory budget (approx.): GLM 4-bit ~7 GB + KV cache ~0.7 GB + embedder ~1 GB +
+# reranker ~0.8 GB ≈ 9.5 GB — inside macOS's default GPU limit (~10.7 GB on 16 GB).
+# Don't keep a second large Ollama model (e.g. gemma4) loaded at the same time.
 #
 # Usage:
 #   scripts/install-models-16gb.sh              # install + download models
@@ -20,6 +21,8 @@
 set -euo pipefail
 
 EMBED_MODEL="qwen3-embedding:0.6b"
+RERANK_MODEL="qwen3-reranker:0.6b"
+RERANK_REPO="Qwen/Qwen3-Reranker-0.6B"
 GLM_REPO="mlx-community/GLM-4.6V-Flash-4bit"
 MLX_PORT="${MLX_PORT:-8080}"
 VENV="${VAULT_MLX_VENV:-$HOME/.local/share/vault-ui/mlx-venv}"
@@ -77,6 +80,26 @@ from huggingface_hub import snapshot_download
 print(snapshot_download(sys.argv[1]))
 PY
 
+# --- 3b. Reranker, built from the official weights ---------------------------
+# Not `ollama pull`: community uploads of Qwen3-Reranker are converted without the
+# LM head it scores with (every token comes back equally likely). Importing the
+# official safetensors keeps it; Ollama runs the result on its MLX engine.
+say "Building reranker $RERANK_MODEL from $RERANK_REPO"
+if ollama list | awk '{print $1}' | grep -qx "$RERANK_MODEL"; then
+  echo "Already installed."
+else
+  RR_DIR=$("$VENV/bin/python" - "$RERANK_REPO" <<'PY'
+import sys
+from huggingface_hub import snapshot_download
+print(snapshot_download(sys.argv[1], allow_patterns=['*.json', '*.safetensors', '*.txt']))
+PY
+)
+  RR_TMP=$(mktemp -d)
+  printf 'FROM %s\nPARAMETER temperature 0\n' "$RR_DIR" > "$RR_TMP/Modelfile"
+  (cd "$RR_TMP" && ollama create "$RERANK_MODEL" --quantize int8 -f Modelfile)
+  rm -rf "$RR_TMP"
+fi
+
 # --- 4. Smoke test -----------------------------------------------------------
 say "Smoke-testing GLM on MLX (loads the model once, ~30 s)"
 "$VENV/bin/python" -m mlx_vlm.generate --model "$GLM_REPO" --max-tokens 40 --temperature 0 \
@@ -115,7 +138,8 @@ if (( CONFIGURE )); then
     \"writerModel\": \"mlx:$GLM_REPO\",
     \"librarianModel\": \"mlx:$GLM_REPO\",
     \"visionModel\": \"mlx:$GLM_REPO\",
-    \"embedModel\": \"$EMBED_MODEL\"
+    \"embedModel\": \"$EMBED_MODEL\",
+    \"rerankModel\": \"$RERANK_MODEL\"
   }" >/dev/null && echo "Saved. The index re-embeds with $EMBED_MODEL automatically on its next sync." \
     || echo "vault-ui isn't reachable at $APP_URL — set the models in Settings instead (see below)."
 fi
@@ -130,6 +154,7 @@ Done.
   vault-ui → Settings → models (or run this script with --configure):
     Chat / Writer / Librarian / Vision:  mlx:$GLM_REPO
     Embedding:                           $EMBED_MODEL
+    Reranker:                            $RERANK_MODEL
 
   Changing the embedding model triggers a one-time full re-index.
   Optional, frees ~10 GB of disk if you no longer use it:  ollama rm gemma4

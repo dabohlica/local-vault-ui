@@ -35,6 +35,7 @@ export async function GET() {
   // Embed model reachability.
   let ollamaReachable = false
   let embedInstalled = false
+  let rerankInstalled = !cfg.rerankModel
   try {
     const res = await fetch(`${OLLAMA_HOST}/api/tags`, { signal: AbortSignal.timeout(2500), cache: 'no-store' })
     if (res.ok) {
@@ -42,6 +43,7 @@ export async function GET() {
       const data = await res.json() as { models?: Array<{ name: string }> }
       const names = (data.models ?? []).map(m => m.name)
       embedInstalled = names.some(m => m === cfg.embedModel || m.split(':')[0] === cfg.embedModel.split(':')[0])
+      rerankInstalled = !cfg.rerankModel || names.some(m => m === cfg.rerankModel || m === `${cfg.rerankModel}:latest`)
     }
   } catch { /* not running */ }
 
@@ -52,6 +54,7 @@ export async function GET() {
   if (!ollamaReachable) problems.push(`Ollama isn't reachable at ${OLLAMA_HOST} — start it, then re-sync.`)
   if (ollamaReachable && !embedInstalled) problems.push(`Embedding model "${cfg.embedModel}" isn't installed — pull it in Settings, then Sync Index.`)
   if (vaultExists && ollamaReachable && embedInstalled && unindexed.length > 0) problems.push(`${unindexed.length} note(s) on disk aren't indexed yet — click Sync Index (or wait for auto-sync).`)
+  if (ollamaReachable && !rerankInstalled) problems.push(`Reranker "${cfg.rerankModel}" isn't installed — search falls back to hybrid ranking. Build it with scripts/install-models-16gb.sh, or turn it off in Settings.`)
   if (indexModel && !modelMatches) problems.push(`The index was built with "${indexModel}" but the embedding model is now "${cfg.embedModel}" — it re-embeds on the next sync (or click Rebuild index).`)
   if (stale.length > 0) problems.push(`${stale.length} indexed note(s) no longer exist on disk — they'll be pruned on next sync.`)
 
@@ -59,6 +62,7 @@ export async function GET() {
     vault: { path: cfg.vaultPath, exists: vaultExists, notesOnDisk: onDisk.length },
     index: { chunks, indexedNotes, model: indexModel, modelMatches, dbPath: indexDbPath(), cwd: process.cwd() },
     embed: { model: cfg.embedModel, ollamaReachable, embedInstalled, host: OLLAMA_HOST },
+    rerank: { model: cfg.rerankModel || null, installed: rerankInstalled },
     unindexed: unindexed.slice(0, 50),
     unindexedCount: unindexed.length,
     stale: stale.slice(0, 50),

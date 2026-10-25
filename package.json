@@ -9,7 +9,8 @@
     "start": "next start -H 127.0.0.1",
     "start:lan": "node scripts/print-urls.mjs ${PORT:-3000} && next start -H $(node scripts/bind-host.mjs)",
     "lint": "next lint",
-    "test": "vitest run"
+    "test": "vitest run",
+    "eval:retrieval": "node scripts/eval-retrieval.mjs"
   },
   "dependencies": {
     "better-sqlite3": "^12.10.1",

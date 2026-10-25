@@ -443,3 +443,71 @@ export async function ollamaEmbed(text: string): Promise<number[]> {
   if (!embedding?.length) throw new Error('Ollama embed failed: model returned no embedding')
   return embedding
 }
+
+// --- Reranking ---------------------------------------------------------------
+// Cross-encoder relevance scoring with a Qwen3-Reranker model served by Ollama.
+// Ollama has no rerank endpoint, but it returns token logprobs: the reranker is
+// trained to answer "yes"/"no" to "does this document answer the query?", so
+// P(yes) / (P(yes) + P(no)) for the single generated token IS the relevance score
+// (the same computation as the model card). Requires a correctly converted model
+// whose LM head is intact — see scripts/install-models-16gb.sh, which builds one
+// from the official weights (some community GGUFs return uniform logprobs).
+
+const RERANK_PREFIX =
+  '<|im_start|>system\nJudge whether the Document meets the requirements based on the Query and the Instruct ' +
+  'provided. Note that the answer can only be "yes" or "no".<|im_end|>\n<|im_start|>user\n'
+const RERANK_SUFFIX = '<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n'
+const RERANK_INSTRUCT = 'Given a question about a personal knowledge base, judge whether this note excerpt helps answer it'
+const RERANK_DOC_CHARS = 3000 // chunks are ≤2000 chars; guard the 2048-token window
+const RERANK_CONCURRENCY = 4
+
+// Relevance from the first generated token's top logprobs (case/space-insensitive).
+export function yesProbability(top: Array<{ token: string; logprob: number }>): number {
+  let yes = 0, no = 0
+  for (const t of top) {
+    const tok = t.token.trim().toLowerCase()
+    if (tok === 'yes') yes += Math.exp(t.logprob)
+    else if (tok === 'no') no += Math.exp(t.logprob)
+  }
+  return yes + no > 0 ? yes / (yes + no) : 0
+}
+
+async function rerankOne(model: string, query: string, doc: string): Promise<number> {
+  const url = `${OLLAMA_HOST}/api/generate`
+  assertLocalHost(url)
+  const prompt = `${RERANK_PREFIX}<Instruct>: ${RERANK_INSTRUCT}\n<Query>: ${query}\n<Document>: ${doc.slice(0, RERANK_DOC_CHARS)}${RERANK_SUFFIX}`
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model,
+      prompt,
+      raw: true,
+      stream: false,
+      logprobs: true,
+      top_logprobs: 20,
+      keep_alive: KEEP_ALIVE,
+      options: { num_predict: 1, temperature: 0, num_ctx: 2048 },
+    }),
+  })
+  if (!res.ok) throw new Error(`Ollama rerank failed: ${res.status} ${await res.text()}`)
+  const data = await res.json() as { logprobs?: Array<{ top_logprobs?: Array<{ token: string; logprob: number }> }> }
+  const top = data.logprobs?.[0]?.top_logprobs
+  if (!top) throw new Error('Ollama rerank failed: no logprobs returned (Ollama too old, or not a reranker model)')
+  return yesProbability(top)
+}
+
+// Scores aligned with `docs`. Throws if the model is missing/unsuitable — callers
+// fall back to the fused ranking.
+export async function ollamaRerank(query: string, docs: string[], model = getConfig().rerankModel): Promise<number[]> {
+  const scores = new Array<number>(docs.length)
+  let next = 0
+  const worker = async () => {
+    while (next < docs.length) {
+      const i = next++
+      scores[i] = await rerankOne(model, query, docs[i])
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(RERANK_CONCURRENCY, docs.length) }, worker))
+  return scores
+}

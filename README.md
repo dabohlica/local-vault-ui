@@ -102,12 +102,36 @@ See [SETUP.md](SETUP.md) for per-machine model recommendations.
 
 ## How RAG works
 
-1. **Index** (`src/lib/embeddings.ts`): each `.md` note is split into self-contained chunks
-   (frontmatter + each heading section), embedded via `nomic-embed-text`, stored in
-   `data/index.sqlite` (gitignored, rebuildable).
-2. **Retrieve**: a query is embedded and scored against all chunks by cosine similarity; top-k returned.
-3. **Answer**: retrieved chunks + the question go to `qwen2.5:3b`, which is instructed to answer
-   only from the provided sources and cite them as `[[wikilinks]]`.
+1. **Index** (`src/lib/embeddings.ts`): each `.md` note is split into chunks per heading section,
+   each prefixed with a breadcrumb (`Projects/Foo › Status › Next steps`). Chunks are embedded (with the
+   model's query/document prefixes) and stored in `data/index.sqlite` (gitignored, rebuildable),
+   alongside an **FTS5 keyword index** over the same chunks.
+2. **Retrieve** (`src/lib/search.ts`): three rankings are fused with reciprocal-rank fusion:
+   - **dense**: embedding similarity
+   - **keyword**: BM25, with note name and heading weighted above body text
+   - **title**: the query names a note ("who is Alex" → `People/Alex.md`)
+
+   The top 20 are then re-scored by a **cross-encoder reranker** (`qwen3-reranker:0.6b` via Ollama,
+   optional), which reads query and excerpt together.
+3. **Answer**: the relevant excerpts are grouped by note (small notes are sent whole) within a character
+   budget (`retrievalBudgetChars`, default 12 000), and the writer model answers only from them, citing
+   `[[wikilinks]]`.
+
+**Measure it on your own vault:** `npm run eval:retrieval` (app running) generates ~30 questions from
+your notes with the local model (once, saved to `data/retrieval-eval.json`, which you can edit) and scores
+every strategy. The 142-note reference vault, 28 questions, `qwen3-embedding:0.6b`:
+
+| strategy | hit@1 | hit@3 | MRR@10 | ms/query |
+|---|---|---|---|---|
+| previous ranking | 0.64 | 0.93 | 0.775 | 40 |
+| hybrid (dense + BM25 + title) | 0.82 | 0.96 | 0.893 | 36 |
+| hybrid + rerank | **0.96** | **1.00** | **0.976** | ~3 900 |
+
+Plain hybrid ties dense on these descriptive questions. It wins on named entities: "who is Alex" style probes went from hit@1 0.50
+to 1.00, though only 4 probes, since the vault has two People notes. It also helps on exact terms
+(standards numbers, codes). The reranker adds ~4 s per query
+but lets the answer prompt shrink from ~5–7k to ~2k tokens, so time-to-first-token still drops by about
+half on a 16 GB Mac.
 
 `Sync Index` (top bar) does an incremental re-embed of only notes whose mtime changed.
 `POST /api/index/rebuild` does a full rebuild.

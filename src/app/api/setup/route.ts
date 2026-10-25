@@ -36,6 +36,10 @@ export async function POST(req: NextRequest) {
     if (body.librarianModel !== undefined) patch.librarianModel = body.librarianModel.trim()
     if (body.embedModel !== undefined) patch.embedModel = body.embedModel.trim()
     if (body.visionModel !== undefined) patch.visionModel = body.visionModel.trim()
+    if (body.rerankModel !== undefined) patch.rerankModel = body.rerankModel.trim()
+    if (body.retrievalBudgetChars !== undefined) {
+      patch.retrievalBudgetChars = Math.min(60000, Math.max(3000, Math.floor(body.retrievalBudgetChars)))
+    }
 
     // Keep the writer/librarian split INHERITING from the chat model until the user
     // explicitly overrides a role. setConfig persists every resolved field, so once

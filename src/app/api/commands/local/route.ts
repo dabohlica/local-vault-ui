@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { retrieve } from '@/lib/embeddings'
+import { retrieve } from '@/lib/search'
 import { buildCommandPrompt } from '@/lib/prompts'
 import { ollamaChatStructured } from '@/lib/ollama'
 import { getLocalCommand } from '@/lib/commands'
