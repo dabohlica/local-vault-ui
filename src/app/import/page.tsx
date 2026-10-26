@@ -67,7 +67,7 @@ export default function ImportPage() {
   return (
     <div className="max-w-3xl mx-auto">
       <div className="mb-6">
-        <h1 className="text-xl font-bold gradient-text flex items-center gap-2"><FileStack size={18} /> Import notes</h1>
+        <h1 className="text-xl md:text-2xl font-semibold tracking-tight flex items-center gap-2"><FileStack size={18} /> Import notes</h1>
         <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>
           Build your vault from scattered notes. Point at a folder of exports (Markdown, txt, HTML from
           Notion/Evernote, <span className="font-mono">.enex</span>, <span className="font-mono">.csv</span>,

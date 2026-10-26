@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { Search, Loader2, X } from 'lucide-react'
 import { SearchResults, type SearchResult } from '@/components/search/SearchResults'
+import { PageHeader } from '@/components/shared/PageHeader'
 
 export default function SearchPage() {
   const [query, setQuery] = useState('')
@@ -39,26 +40,23 @@ export default function SearchPage() {
     if (debounceRef.current) clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(() => {
       void doSearch(query)
-    }, 400)
+    }, 250)
 
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current)
     }
   }, [query, doSearch])
 
-  // Focus on mount
+  // Focus on mount; accept ?q= from links.
   useEffect(() => {
+    const q = new URLSearchParams(window.location.search).get('q')
+    if (q) setQuery(q)
     inputRef.current?.focus()
   }, [])
 
   return (
-    <div>
-      <div className="mb-6">
-        <h1 className="text-xl font-bold gradient-text">Search</h1>
-        <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>
-          Full-text search across all vault files
-        </p>
-      </div>
+    <div className="max-w-3xl mx-auto">
+      <PageHeader title="Search" subtitle="Find notes by name or by what’s in them." />
 
       {/* Search input */}
       <div className="relative mb-6">
@@ -75,15 +73,7 @@ export default function SearchPage() {
           value={query}
           onChange={e => setQuery(e.target.value)}
           placeholder="Search vault…"
-          className="w-full pl-12 pr-12 py-3.5 rounded-2xl text-base outline-none transition-all duration-150"
-          style={{
-            background: 'var(--bg-surface)',
-            border: '1px solid var(--border)',
-            color: 'var(--text)',
-            fontFamily: 'inherit',
-          }}
-          onFocus={e => { e.currentTarget.style.borderColor = 'var(--primary)' }}
-          onBlur={e => { e.currentTarget.style.borderColor = 'var(--border)' }}
+          className="field w-full pl-12 pr-12 py-3.5 text-base rounded-2xl"
         />
         {query && (
           <button
@@ -110,7 +100,7 @@ export default function SearchPage() {
             <Search size={28} style={{ color: 'var(--text-subtle)' }} />
           </div>
           <p className="text-sm" style={{ color: 'var(--text-subtle)' }}>
-            Type to search your vault
+            Type a name, a topic, or a phrase
           </p>
         </div>
       )}

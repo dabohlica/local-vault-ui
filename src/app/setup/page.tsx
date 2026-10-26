@@ -257,15 +257,22 @@ export default function SetupPage() {
 
   return (
     <div className="max-w-2xl mx-auto flex flex-col gap-6 py-2">
-      <div className="text-center">
-        <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl mb-3" style={{ background: 'var(--icon-grad)' }}>
-          <BookOpen size={26} style={{ color: 'var(--primary)' }} />
+      {allReady ? (
+        <div>
+          <h1 className="text-xl md:text-2xl font-semibold tracking-tight" style={{ color: 'var(--text)' }}>Settings</h1>
+          <p className="text-sm mt-1" style={{ color: 'var(--text-subtle)' }}>Your vault, the local models, and when things run. Everything stays on this Mac.</p>
         </div>
-        <h1 className="text-2xl font-bold gradient-text">Welcome to Vault UI</h1>
-        <p className="text-sm mt-2" style={{ color: 'var(--text-muted)' }}>
-          A local-first second brain. Three quick steps and everything runs on your machine — no cloud, no data leaving your device.
-        </p>
-      </div>
+      ) : (
+        <div className="text-center">
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl mb-3" style={{ background: 'var(--primary-tint)' }}>
+            <BookOpen size={26} style={{ color: 'var(--primary)' }} />
+          </div>
+          <h1 className="text-2xl font-semibold tracking-tight" style={{ color: 'var(--text)' }}>Welcome</h1>
+          <p className="text-sm mt-2" style={{ color: 'var(--text-muted)' }}>
+            Your notes, with an assistant that runs entirely on this Mac. Three quick steps — nothing leaves your device.
+          </p>
+        </div>
+      )}
 
       {/* Step 1 — Vault */}
       <StepCard n={1} title="Connect your vault" icon={FolderOpen} done={vaultReady}>

@@ -1,21 +1,25 @@
 'use client'
 
-import Link from 'next/link'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Inbox as InboxIcon, RefreshCw, Loader2, PartyPopper } from 'lucide-react'
+import { RefreshCw, Loader2, CheckCircle2, SlidersHorizontal } from 'lucide-react'
 import { SwipeDeck, type SwipeDecision } from '@/components/inbox/SwipeDeck'
 import { SourcesPanel } from '@/components/inbox/SourcesPanel'
+import { SuggestionsPanel } from '@/components/inbox/SuggestionsPanel'
+import { PageHeader } from '@/components/shared/PageHeader'
 import { useToast } from '@/components/shared/Toast'
 import type { InboxItem, InboxStatus, RefreshResult } from '@/lib/inbox'
 
-type Tab = 'new' | 'later' | 'sources'
+type Tab = 'new' | 'suggestions' | 'later' | 'sources'
+const TABS: Tab[] = ['new', 'suggestions', 'later', 'sources']
 type Counts = { byStatus: Record<InboxStatus, number>; newBySection: Record<string, number> }
 type Job = { running: boolean; last: RefreshResult | null }
 
-// Swipe triage for candidate knowledge from your feeds (see src/lib/inbox.ts).
+// Everything waiting for a decision: new reads from your feeds (swipe triage, see
+// src/lib/inbox.ts), suggestions the night shift prepared, and items parked for later.
 export default function InboxPage() {
   const { showToast } = useToast()
   const [tab, setTab] = useState<Tab>('new')
+  const [suggestions, setSuggestions] = useState<number | null>(null)
   const [section, setSection] = useState<string | null>(null)
   const [items, setItems] = useState<InboxItem[] | null>(null)
   const [counts, setCounts] = useState<Counts | null>(null)
@@ -24,7 +28,7 @@ export default function InboxPage() {
   const poll = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const load = useCallback(async () => {
-    if (tab === 'sources') return
+    if (tab === 'sources' || tab === 'suggestions') return
     const q = new URLSearchParams({ status: tab, ...(section ? { section } : {}) })
     try {
       const d = await fetch(`/api/inbox?${q}`, { cache: 'no-store' }).then(r => r.json())
@@ -37,6 +41,22 @@ export default function InboxPage() {
   }, [tab, section, showToast])
 
   useEffect(() => { setItems(null); void load() }, [load])
+
+  // Deep links: /inbox?tab=suggestions|later|sources
+  useEffect(() => {
+    const t = new URLSearchParams(window.location.search).get('tab') as Tab | null
+    if (t && TABS.includes(t)) setTab(t)
+  }, [])
+
+  const loadSuggestions = useCallback(() => {
+    fetch('/api/pending', { cache: 'no-store' }).then(r => r.json()).then(d => setSuggestions(d.count ?? 0)).catch(() => {})
+  }, [])
+  useEffect(() => { loadSuggestions() }, [loadSuggestions])
+
+  function pickTab(t: Tab) {
+    setTab(t); setSection(null)
+    window.history.replaceState(null, '', t === 'new' ? '/inbox' : `/inbox?tab=${t}`)
+  }
   useEffect(() => () => { if (poll.current) clearTimeout(poll.current) }, [])
 
   // While a fetch runs, poll until it finishes, then report what came in.
@@ -99,37 +119,37 @@ export default function InboxPage() {
 
   return (
     <div className="max-w-3xl mx-auto">
-      <div className="mb-5 flex items-start justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-bold gradient-text flex items-center gap-2"><InboxIcon size={18} /> Inbox</h1>
-          <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>
-            New papers and articles from your sources, best match first. Keep → saved as a note in your vault. Skip → it learns.
-          </p>
-        </div>
-        <button onClick={() => void refresh()} disabled={job?.running}
-          className="flex items-center gap-1.5 text-sm px-3 py-2 rounded-lg border flex-shrink-0 disabled:opacity-60"
-          style={{ borderColor: 'var(--border)', color: 'var(--text-muted)', background: 'var(--bg-surface)' }}>
-          <RefreshCw size={14} className={job?.running ? 'animate-spin' : ''} />
-          <span className="hidden sm:inline">{job?.running ? 'Fetching…' : 'Fetch now'}</span>
+      <PageHeader title="Inbox" subtitle="New reads picked for you, and changes waiting for your OK.">
+        {tab === 'new' && (
+          <button onClick={() => void refresh()} disabled={job?.running} className="btn btn-ghost text-xs" title="Check your sources for new items now">
+            <RefreshCw size={14} className={job?.running ? 'animate-spin' : ''} />
+            <span className="hidden sm:inline">{job?.running ? 'Checking…' : 'Check now'}</span>
+          </button>
+        )}
+        <button onClick={() => pickTab('sources')} className="btn btn-ghost text-xs" title="Choose where new reads come from" style={tab === 'sources' ? { color: 'var(--primary)', borderColor: 'var(--primary)' } : undefined}>
+          <SlidersHorizontal size={14} /> <span className="hidden sm:inline">Sources</span>
         </button>
-      </div>
+      </PageHeader>
 
-      <div className="flex gap-1 mb-4 p-1 rounded-xl" style={{ background: 'var(--bg-elevated)' }}>
-        {([['new', 'Triage', counts?.byStatus.new], ['later', 'Later', counts?.byStatus.later], ['sources', 'Sources', undefined]] as const).map(([key, label, n]) => (
-          <button key={key} onClick={() => { setTab(key); setSection(null) }}
-            className="flex-1 text-sm font-medium px-3 py-1.5 rounded-lg transition-all duration-150"
+      <div className="flex gap-1 mb-5 p-1 rounded-xl" style={{ background: 'var(--bg-elevated)' }}>
+        {([['new', 'To read', counts?.byStatus.new], ['suggestions', 'Suggestions', suggestions], ['later', 'Later', counts?.byStatus.later]] as const).map(([key, label, n]) => (
+          <button key={key} onClick={() => pickTab(key)}
+            className="flex-1 flex items-center justify-center gap-1.5 text-sm font-medium px-3 py-1.5 rounded-lg transition-colors"
             style={{
               background: tab === key ? 'var(--bg-surface)' : 'transparent',
-              color: tab === key ? 'var(--primary)' : 'var(--text-muted)',
-              boxShadow: tab === key ? '0 1px 4px rgba(0,0,0,0.08)' : 'none',
+              color: tab === key ? 'var(--text)' : 'var(--text-muted)',
+              boxShadow: tab === key ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
             }}>
-            {label}{n ? ` (${n})` : ''}
+            {label}
+            {!!n && <span className="text-[11px] font-semibold px-1.5 rounded-full" style={{ background: tab === key ? 'var(--primary)' : 'var(--border)', color: tab === key ? 'white' : 'var(--text-muted)' }}>{n}</span>}
           </button>
         ))}
       </div>
 
       {tab === 'sources' ? (
         <SourcesPanel />
+      ) : tab === 'suggestions' ? (
+        <SuggestionsPanel onChange={loadSuggestions} />
       ) : (
         <>
           {tab === 'new' && sections.length > 1 && (
@@ -148,21 +168,20 @@ export default function InboxPage() {
             <div className="flex justify-center py-16"><Loader2 className="animate-spin" style={{ color: 'var(--primary)' }} /></div>
           ) : items.length === 0 ? (
             <div className="card p-10 flex flex-col items-center text-center gap-3">
-              <PartyPopper size={28} style={{ color: 'var(--primary)' }} />
-              <p className="text-sm font-medium" style={{ color: 'var(--text)' }}>{tab === 'later' ? 'Nothing parked for later.' : 'Inbox zero.'}</p>
+              <CheckCircle2 size={28} style={{ color: 'var(--success)' }} />
+              <p className="text-sm font-medium" style={{ color: 'var(--text)' }}>{tab === 'later' ? 'Nothing parked for later.' : 'All caught up.'}</p>
               <p className="text-xs max-w-sm" style={{ color: 'var(--text-subtle)' }}>
-                {lastRun ? `Last fetch ${new Date(lastRun.ranAt).toLocaleString()}: ${lastRun.added} new.` : 'New items arrive on the schedule set under Sources.'}{' '}
+                {lastRun ? `Last checked ${new Date(lastRun.ranAt).toLocaleString()}: ${lastRun.added} new.` : 'New reads arrive automatically from your sources.'}{' '}
                 {undo.length > 0 && <button onClick={() => void onUndo()} className="underline" style={{ color: 'var(--primary)' }}>Undo last</button>}
               </p>
-              <button onClick={() => setTab('sources')} className="text-xs font-medium" style={{ color: 'var(--primary)' }}>Manage sources →</button>
             </div>
           ) : (
             <SwipeDeck items={items} onDecide={onDecide} onUndo={() => void onUndo()} canUndo={undo.length > 0} />
           )}
 
-          {tab === 'new' && (
+          {tab === 'new' && items !== null && items.length > 0 && (
             <p className="text-xs text-center mt-6" style={{ color: 'var(--text-subtle)' }}>
-              The morning briefing on the <Link href="/" style={{ color: 'var(--primary)' }}>dashboard</Link> summarizes the best of these.
+              Swipe right or press → to keep it as a note, left or ← to skip. Your choices teach it what you like.
             </p>
           )}
         </>

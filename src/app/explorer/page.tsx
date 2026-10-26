@@ -4,11 +4,13 @@ import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { FileTree } from '@/components/explorer/FileTree'
 import { MarkdownPreview } from '@/components/explorer/MarkdownPreview'
+import { Search } from 'lucide-react'
 import { cn } from '@/lib/cn'
 
 function ExplorerContent() {
   const searchParams = useSearchParams()
   const [selectedFile, setSelectedFile] = useState<string | null>(null)
+  const [filter, setFilter] = useState('')
 
   useEffect(() => {
     const fileParam = searchParams.get('file')
@@ -27,25 +29,31 @@ function ExplorerContent() {
           selectedFile ? 'hidden' : 'flex',
         )}
         style={{
-          background: 'var(--bg-surface)',
+          background: 'var(--bg-base)',
           borderRight: '1px solid var(--border-subtle)',
         }}
       >
-        <div
-          className="px-4 py-3 border-b flex-shrink-0"
-          style={{ borderColor: 'var(--border-subtle)' }}
-        >
-          <p className="text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>
-            VAULT FILES
-          </p>
+        <div className="p-2 border-b flex-shrink-0" style={{ borderColor: 'var(--border-subtle)' }}>
+          <div className="relative">
+            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: 'var(--text-subtle)' }} />
+            <input
+              value={filter}
+              onChange={e => setFilter(e.target.value)}
+              placeholder="Filter notes…"
+              className="field w-full h-8 pl-8 pr-2 text-sm"
+              aria-label="Filter notes by name"
+            />
+          </div>
         </div>
-        <FileTree selectedPath={selectedFile} onSelect={setSelectedFile} />
+        <div className="flex-1 min-h-0">
+          <FileTree selectedPath={selectedFile} onSelect={setSelectedFile} filter={filter} />
+        </div>
       </div>
 
       {/* Preview panel. Hidden on mobile until a file is picked; full-width then. */}
       <div
         className={cn('flex-1 min-w-0 md:block', selectedFile ? 'block' : 'hidden')}
-        style={{ background: 'var(--bg-base)' }}
+        style={{ background: 'var(--bg-surface)' }}
       >
         <MarkdownPreview filePath={selectedFile} onBack={() => setSelectedFile(null)} />
       </div>
@@ -53,15 +61,9 @@ function ExplorerContent() {
   )
 }
 
-export default function ExplorerPage() {
+export default function NotesPage() {
   return (
-    <div className="flex flex-col h-[calc(100vh-56px-32px)] md:h-[calc(100vh-56px-48px)]">
-      <div className="mb-4 flex-shrink-0">
-        <h1 className="text-xl font-bold gradient-text">Explorer</h1>
-        <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>
-          Browse and preview your vault files
-        </p>
-      </div>
+    <div className="page-fill flex flex-col">
       <div className="flex-1 min-h-0">
         <Suspense fallback={<div className="text-sm" style={{ color: 'var(--text-subtle)' }}>Loading…</div>}>
           <ExplorerContent />

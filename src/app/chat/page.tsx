@@ -1,8 +1,11 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Send, Loader2, MessageSquare, FileText, Trash2, BookmarkPlus, Plus } from 'lucide-react'
+import Link from 'next/link'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import { ArrowUp, Loader2, MessageCircle, FileText, Trash2, BookmarkPlus, Plus, History, X } from 'lucide-react'
 import { ProposalReview, type ProposalResponse } from '@/components/shared/ProposalReview'
 import { TagPicker } from '@/components/shared/TagPicker'
 import { fetchWithRetry } from '@/lib/fetchRetry'
@@ -10,6 +13,13 @@ import { fetchWithRetry } from '@/lib/fetchRetry'
 type Citation = { path: string; heading: string; images?: string[] }
 type Message = { role: 'user' | 'assistant'; content: string; citations?: Citation[] }
 type SessionItem = { id: string; title: string; updatedAt: number; messageCount: number }
+
+const STARTERS = [
+  'What did I work on this week?',
+  'What are my open projects and their next steps?',
+  'Which decisions did I make recently, and why?',
+  'Who have I met recently?',
+]
 
 function buildTranscript(messages: Message[]): string {
   const date = new Date().toISOString().slice(0, 10)
@@ -22,6 +32,23 @@ function buildTranscript(messages: Message[]): string {
   return lines.join('\n')
 }
 
+const titleOf = (p: string) => (p.split('/').pop() ?? p).replace(/\.md$/, '')
+const noteHref = (p: string) => `/explorer?file=${encodeURIComponent(p)}`
+
+// [[Note]] in an answer → a link to that note (cited notes first, then any note
+// with that path or name), else just bold.
+function linkWikilinks(text: string, citations: Citation[] = [], notes: string[] = []): string {
+  return text.replace(/\[\[([^\]|#]+)(?:[#|][^\]]*)?(?:\|([^\]]*))?\]\]/g, (_, target: string, alias?: string) => {
+    const t = target.trim()
+    const label = alias?.trim() || titleOf(t)
+    const want = t.toLowerCase().replace(/\.md$/, '')
+    const pool = [...citations.map(c => c.path), ...notes]
+    const hit = pool.find(p => p.toLowerCase().replace(/\.md$/, '') === want)
+      ?? pool.find(p => titleOf(p).toLowerCase() === titleOf(want))
+    return hit ? `[${label}](${noteHref(hit)})` : `**${label}**`
+  })
+}
+
 export default function ChatPage() {
   const router = useRouter()
   const [sessions, setSessions] = useState<SessionItem[]>([])
@@ -31,9 +58,14 @@ export default function ChatPage() {
   const [loading, setLoading] = useState(false)
   const [streaming, setStreaming] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [saveOpen, setSaveOpen] = useState(false)
   const [capturing, setCapturing] = useState(false)
   const [captureTags, setCaptureTags] = useState<string[]>([])
   const [proposal, setProposal] = useState<ProposalResponse | null>(null)
+  const [historyOpen, setHistoryOpen] = useState(false)
+  const [notePaths, setNotePaths] = useState<string[]>([])
+  const scroller = useRef<HTMLDivElement>(null)
+  const ta = useRef<HTMLTextAreaElement>(null)
 
   const loadSessions = useCallback(async () => {
     try {
@@ -45,7 +77,7 @@ export default function ChatPage() {
   }, [])
 
   const openSession = useCallback(async (id: string) => {
-    setProposal(null); setError(null)
+    setProposal(null); setError(null); setHistoryOpen(false)
     try {
       const res = await fetch(`/api/chat/sessions/${id}`, { cache: 'no-store' })
       const data = await res.json() as { id: string; messages: Message[] }
@@ -54,16 +86,9 @@ export default function ChatPage() {
     } catch { /* ignore */ }
   }, [])
 
-  // On load: open the most recent session if there is one.
-  useEffect(() => {
-    void (async () => {
-      const list = await loadSessions()
-      if (list.length) await openSession(list[0].id)
-    })()
-  }, [loadSessions, openSession])
-
   function newChat() {
-    setSessionId(undefined); setMessages([]); setProposal(null); setError(null); setInput('')
+    setSessionId(undefined); setMessages([]); setProposal(null); setError(null); setInput(''); setHistoryOpen(false); setSaveOpen(false)
+    ta.current?.focus()
   }
 
   async function deleteSession(id: string) {
@@ -72,8 +97,25 @@ export default function ChatPage() {
     await loadSessions()
   }
 
-  async function send() {
-    const question = input.trim()
+  useEffect(() => {
+    fetch('/api/vault/notes').then(r => r.json()).then(d => setNotePaths((d.notes ?? []).map((n: { path: string }) => n.path))).catch(() => {})
+  }, [])
+
+  // Keep the newest message in view while answers stream in.
+  useEffect(() => {
+    const el = scroller.current
+    if (el) el.scrollTop = el.scrollHeight
+  }, [messages, loading])
+
+  useEffect(() => {
+    const el = ta.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${Math.min(el.scrollHeight, 200)}px`
+  }, [input])
+
+  async function send(text?: string) {
+    const question = (text ?? input).trim()
     if (!question || loading) return
 
     setMessages(prev => [...prev, { role: 'user', content: question }])
@@ -158,6 +200,25 @@ export default function ChatPage() {
     }
   }
 
+  // On load: a question handed over from Home / ⌘K starts a fresh chat;
+  // otherwise reopen the most recent conversation.
+  const booted = useRef(false)
+  useEffect(() => {
+    if (booted.current) return
+    booted.current = true
+    const q = new URLSearchParams(window.location.search).get('q')
+    void (async () => {
+      const list = await loadSessions()
+      if (q) {
+        router.replace('/chat')
+        void send(q)
+      } else if (list.length) {
+        await openSession(list[0].id)
+      }
+    })()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   // Route the whole conversation through the normal ingest pipeline → review.
   async function includeInVault() {
     if (capturing || messages.length === 0) return
@@ -175,6 +236,7 @@ export default function ChatPage() {
       const data = await res.json() as ProposalResponse
       if (!res.ok) throw new Error(data.error ?? 'Could not capture conversation')
       setProposal(data)
+      setSaveOpen(false)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not capture conversation')
     } finally {
@@ -182,122 +244,137 @@ export default function ChatPage() {
     }
   }
 
-  return (
-    <div className="flex flex-col h-[calc(100vh-56px-32px)] md:h-[calc(100vh-56px-48px)]">
-      {proposal && (
-        <div className="mb-4 flex-shrink-0 rounded-2xl p-4 overflow-y-auto" style={{ border: '1px solid var(--border)', background: 'var(--bg-surface)', maxHeight: '50vh' }}>
-          <p className="text-sm font-medium mb-3" style={{ color: 'var(--text)' }}>Review proposed changes</p>
-          <ProposalReview result={proposal} onApplied={() => setProposal(null)} onDiscard={() => setProposal(null)} />
-        </div>
-      )}
+  const current = sessions.find(s => s.id === sessionId)
 
-      <div className="flex-1 min-h-0 flex gap-4">
-        {/* Sessions rail — hidden on phones to give the conversation full width. */}
-        <aside className="hidden md:flex w-60 flex-shrink-0 flex-col rounded-2xl overflow-hidden" style={{ border: '1px solid var(--border-subtle)', background: 'var(--bg-surface)' }}>
-          <button
-            onClick={newChat}
-            className="m-2 flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium transition-all hover:scale-[1.02]"
-            style={{ background: 'linear-gradient(135deg, var(--primary), var(--accent))', color: 'white' }}
-          >
+  return (
+    <div className="page-fill flex gap-4 max-w-6xl mx-auto">
+      {/* Conversation history: a rail on desktop, an overlay on phones. */}
+      {historyOpen && <div className="fixed inset-0 z-40 bg-black/30 md:hidden" onClick={() => setHistoryOpen(false)} aria-hidden />}
+      <aside
+        className={`${historyOpen ? 'fixed inset-y-0 left-0 z-50 w-72 flex' : 'hidden'} md:static md:z-auto md:flex md:w-60 flex-shrink-0 flex-col md:rounded-2xl overflow-hidden border-r md:border`}
+        style={{ borderColor: 'var(--border-subtle)', background: 'var(--bg-surface)' }}
+      >
+        <div className="flex items-center gap-2 p-2">
+          <button onClick={newChat} className="btn btn-ghost flex-1 justify-start text-sm">
             <Plus size={15} /> New chat
           </button>
-          <div className="flex-1 overflow-y-auto px-2 pb-2 flex flex-col gap-1">
-            {sessions.length === 0 && (
-              <p className="text-xs px-2 py-3" style={{ color: 'var(--text-subtle)' }}>No conversations yet.</p>
-            )}
-            {sessions.map(s => (
-              <div
-                key={s.id}
-                onClick={() => void openSession(s.id)}
-                className="group flex items-center gap-2 px-2.5 py-2 rounded-lg cursor-pointer transition-all"
-                style={s.id === sessionId
-                  ? { background: 'var(--icon-grad)', borderLeft: '2px solid var(--primary)' }
-                  : { background: 'transparent' }}
+          <button onClick={() => setHistoryOpen(false)} className="md:hidden p-2" style={{ color: 'var(--text-muted)' }} aria-label="Close history"><X size={18} /></button>
+        </div>
+        <div className="flex-1 overflow-y-auto px-2 pb-2 flex flex-col gap-0.5">
+          {sessions.length === 0 && (
+            <p className="text-xs px-2 py-3" style={{ color: 'var(--text-subtle)' }}>Your conversations will appear here.</p>
+          )}
+          {sessions.map(s => (
+            <div
+              key={s.id}
+              onClick={() => void openSession(s.id)}
+              className="group flex items-center gap-2 px-2.5 py-2 rounded-lg cursor-pointer hover-surface"
+              style={s.id === sessionId ? { background: 'var(--primary-tint)' } : undefined}
+            >
+              <span className="flex-1 truncate text-sm" style={{ color: s.id === sessionId ? 'var(--primary)' : 'var(--text-muted)' }}>{s.title}</span>
+              <button
+                onClick={e => { e.stopPropagation(); void deleteSession(s.id) }}
+                className="opacity-0 group-hover:opacity-100 transition-opacity"
+                style={{ color: 'var(--text-subtle)' }}
+                title="Delete conversation"
+                aria-label="Delete conversation"
               >
-                <MessageSquare size={13} style={{ color: s.id === sessionId ? 'var(--primary)' : 'var(--text-subtle)', flexShrink: 0 }} />
-                <span className="flex-1 truncate text-xs" style={{ color: 'var(--text)' }}>{s.title}</span>
-                <button
-                  onClick={e => { e.stopPropagation(); void deleteSession(s.id) }}
-                  className="opacity-0 group-hover:opacity-100 transition-opacity"
-                  style={{ color: 'var(--text-subtle)' }}
-                  title="Delete conversation"
-                >
-                  <Trash2 size={12} />
-                </button>
-              </div>
-            ))}
-          </div>
-          <p className="text-[10px] px-3 py-2 border-t" style={{ color: 'var(--text-subtle)', borderColor: 'var(--border-subtle)' }}>
-            Conversations auto-clear after 7 days.
-          </p>
-        </aside>
-
-        {/* Chat column */}
-        <div className="flex-1 min-w-0 min-h-0 flex flex-col rounded-2xl overflow-hidden" style={{ border: '1px solid var(--border-subtle)', background: 'var(--bg-surface)' }}>
-          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between px-4 md:px-5 py-3 border-b flex-shrink-0" style={{ borderColor: 'var(--border-subtle)' }}>
-            <div className="min-w-0">
-              <h1 className="text-sm font-semibold" style={{ color: 'var(--text)' }}>Chat</h1>
-              {/* Tagline is noise on a phone — the bottom helper text already says this. */}
-              <p className="text-xs hidden sm:block" style={{ color: 'var(--text-subtle)' }}>Ask your vault, or Edit it — all local, every edit reviewed.</p>
+                <Trash2 size={13} />
+              </button>
             </div>
-            {messages.length > 0 && (
-              // Capture controls: full-width row under the title on mobile; inline on md+.
-              <div className="flex items-center gap-2 md:flex-shrink-0">
-                <div className="flex-1 min-w-0 md:w-56 md:flex-none">
-                  <TagPicker value={captureTags} onChange={setCaptureTags} compact />
-                </div>
-                <button
-                  onClick={() => void includeInVault()}
-                  disabled={capturing}
-                  className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all hover:scale-[1.02] disabled:opacity-50 flex-shrink-0 whitespace-nowrap"
-                  style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}
-                  title="Turn this conversation into a vault note via the ingest pipeline — tagged with the tags on the left"
-                >
-                  {capturing ? <Loader2 size={13} className="animate-spin" /> : <BookmarkPlus size={13} />}
-                  Save to vault
-                </button>
-              </div>
-            )}
+          ))}
+        </div>
+        <p className="text-[11px] px-3 py-2 border-t" style={{ color: 'var(--text-subtle)', borderColor: 'var(--border-subtle)' }}>
+          Kept for 7 days.
+        </p>
+      </aside>
+
+      <div className="flex-1 min-w-0 min-h-0 flex flex-col rounded-2xl overflow-hidden border" style={{ borderColor: 'var(--border-subtle)', background: 'var(--bg-surface)' }}>
+        <div className="flex items-center gap-2 px-3 md:px-5 h-12 border-b flex-shrink-0" style={{ borderColor: 'var(--border-subtle)' }}>
+          <button onClick={() => setHistoryOpen(true)} className="md:hidden p-1.5 rounded-lg" style={{ color: 'var(--text-muted)' }} aria-label="Conversations"><History size={18} /></button>
+          <p className="flex-1 min-w-0 truncate text-sm font-medium" style={{ color: 'var(--text)' }}>{current?.title ?? 'New conversation'}</p>
+          {messages.length > 0 && (
+            <>
+              <button onClick={() => setSaveOpen(v => !v)} className="btn btn-ghost text-xs py-1.5 px-2.5" title="Turn this conversation into a note">
+                <BookmarkPlus size={14} /> <span className="hidden sm:inline">Save as note</span>
+              </button>
+              <button onClick={newChat} className="md:hidden p-1.5 rounded-lg" style={{ color: 'var(--text-muted)' }} aria-label="New chat"><Plus size={18} /></button>
+            </>
+          )}
+        </div>
+
+        {saveOpen && (
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2 px-3 md:px-5 py-3 border-b" style={{ borderColor: 'var(--border-subtle)', background: 'var(--bg-base)' }}>
+            <p className="text-xs flex-shrink-0" style={{ color: 'var(--text-muted)' }}>Keep the key points as a note. Tags (optional):</p>
+            <div className="flex-1 min-w-0"><TagPicker value={captureTags} onChange={setCaptureTags} compact /></div>
+            <button onClick={() => void includeInVault()} disabled={capturing} className="btn btn-primary text-xs py-1.5">
+              {capturing ? <Loader2 size={13} className="animate-spin" /> : null} {capturing ? 'Preparing…' : 'Prepare note'}
+            </button>
           </div>
+        )}
 
-          <div className="flex-1 overflow-y-auto px-4 md:px-6 py-5 flex flex-col gap-4">
-            {messages.length === 0 && (
-              <div className="flex flex-col items-center justify-center h-full gap-3">
-                <div className="w-16 h-16 rounded-2xl flex items-center justify-center" style={{ background: 'var(--bg-elevated)' }}>
-                  <MessageSquare size={28} style={{ color: 'var(--text-subtle)' }} />
+        {proposal && (
+          <div className="flex-shrink-0 p-4 overflow-y-auto border-b" style={{ borderColor: 'var(--border-subtle)', maxHeight: '50%' }}>
+            <p className="text-sm font-medium mb-3" style={{ color: 'var(--text)' }}>Here’s what would be saved — approve to write it</p>
+            <ProposalReview result={proposal} onApplied={() => setProposal(null)} onDiscard={() => setProposal(null)} />
+          </div>
+        )}
+
+        <div ref={scroller} className="flex-1 overflow-y-auto px-4 md:px-8 py-6">
+          <div className="max-w-3xl mx-auto flex flex-col gap-6">
+            {messages.length === 0 && !loading && (
+              <div className="flex flex-col items-center text-center gap-4 pt-[8vh]">
+                <span className="w-12 h-12 rounded-2xl flex items-center justify-center" style={{ background: 'var(--primary-tint)', color: 'var(--primary)' }}>
+                  <MessageCircle size={22} />
+                </span>
+                <div>
+                  <h1 className="text-lg font-semibold" style={{ color: 'var(--text)' }}>Ask your notes</h1>
+                  <p className="text-sm mt-1" style={{ color: 'var(--text-subtle)' }}>Answers come only from your vault, with the notes they’re based on.</p>
                 </div>
-                <p className="text-sm" style={{ color: 'var(--text-subtle)' }}>
-                  Ask something like &ldquo;What do I know about Example Company?&rdquo;
-                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full max-w-xl mt-2">
+                  {STARTERS.map(s => (
+                    <button key={s} onClick={() => void send(s)} className="text-left text-sm px-4 py-3 rounded-xl border hover-surface" style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}>
+                      {s}
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
 
-            {messages.map((m, i) => (
-              <div key={i} className="flex flex-col gap-2 min-w-0 max-w-[90%] sm:max-w-2xl" style={{ alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start' }}>
-                <div
-                  className="px-4 py-2.5 rounded-2xl text-sm whitespace-pre-wrap break-words"
-                  style={{
-                    background: m.role === 'user' ? 'var(--primary)' : 'var(--bg-elevated)',
-                    color: m.role === 'user' ? 'white' : 'var(--text)',
-                    border: m.role === 'assistant' ? '1px solid var(--border)' : 'none',
-                  }}
-                >
-                  {m.content}
+            {messages.map((m, i) => m.role === 'user' ? (
+              <div key={i} className="self-end max-w-[85%] px-4 py-2.5 rounded-2xl rounded-br-md text-sm whitespace-pre-wrap break-words" style={{ background: 'var(--primary)', color: 'white' }}>
+                {m.content}
+              </div>
+            ) : (
+              <div key={i} className="flex flex-col gap-3 min-w-0">
+                <div className="markdown-body chat-answer">
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    components={{
+                      a: ({ href, children }) => href?.startsWith('/')
+                        ? <Link href={href}>{children}</Link>
+                        : <a href={href} target="_blank" rel="noopener noreferrer">{children}</a>,
+                    }}
+                  >
+                    {linkWikilinks(m.content, m.citations, notePaths)}
+                  </ReactMarkdown>
                 </div>
 
                 {m.citations && m.citations.length > 0 && (
-                  <div className="flex flex-col gap-1.5">
+                  <div className="flex flex-col gap-2">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: 'var(--text-subtle)' }}>Based on</p>
                     <div className="flex flex-wrap gap-1.5">
                       {m.citations.map(c => (
-                        <button
+                        <Link
                           key={c.path}
-                          onClick={() => router.push(`/explorer?file=${encodeURIComponent(c.path)}`)}
-                          className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs transition-all duration-150 hover:scale-[1.02] min-w-0 max-w-full"
-                          style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}
+                          href={noteHref(c.path)}
+                          title={c.path}
+                          className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs min-w-0 max-w-full border hover-surface"
+                          style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}
                         >
-                          <FileText size={11} style={{ color: 'var(--primary)', flexShrink: 0 }} />
-                          <span className="truncate">{c.path.replace(/\.md$/, '')}</span>
-                        </button>
+                          <FileText size={12} style={{ color: 'var(--primary)', flexShrink: 0 }} />
+                          <span className="truncate">{titleOf(c.path)}</span>
+                        </Link>
                       ))}
                     </div>
                     {/* Images embedded in the cited notes — the matched files themselves. */}
@@ -310,9 +387,9 @@ export default function ChatPage() {
                             src={`/api/vault/asset?path=${encodeURIComponent(img)}`}
                             alt={img.split('/').pop()}
                             title={img}
-                            onClick={() => router.push(`/explorer?file=${encodeURIComponent(img)}`)}
-                            className="h-20 max-w-[160px] object-cover rounded-lg cursor-pointer transition-all duration-150 hover:scale-[1.03]"
-                            style={{ border: '1px solid var(--border)' }}
+                            onClick={() => router.push(noteHref(img))}
+                            className="h-20 max-w-[160px] object-cover rounded-lg cursor-pointer border"
+                            style={{ borderColor: 'var(--border)' }}
                           />
                         ))}
                       </div>
@@ -324,36 +401,36 @@ export default function ChatPage() {
 
             {loading && !streaming && (
               <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--text-subtle)' }}>
-                <Loader2 size={14} className="animate-spin" /> Thinking…
+                <Loader2 size={14} className="animate-spin" /> Reading your notes…
               </div>
             )}
-            {error && <p className="text-sm" style={{ color: 'var(--danger)' }}>{error}</p>}
+            {error && <p className="text-sm rounded-xl px-4 py-3" style={{ color: 'var(--danger)', background: 'var(--bg-elevated)' }}>{error}</p>}
           </div>
+        </div>
 
-          <div className="flex-shrink-0 border-t p-3 flex flex-col gap-2" style={{ borderColor: 'var(--border-subtle)' }}>
-            <span className="text-xs px-1 self-start" style={{ color: 'var(--text-subtle)' }}>
-              Answers come from your notes. To add knowledge, use <strong>Add</strong> or drag a file in — or
-              save this conversation below.
-            </span>
-            <div className="flex gap-2">
-              <input
-                value={input}
-                onChange={e => setInput(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') void send() }}
-                placeholder="Ask about your vault…"
-                className="flex-1 rounded-xl px-4 py-2.5 text-sm outline-none"
-                style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text)' }}
-              />
-              <button
-                onClick={() => void send()}
-                disabled={!input.trim() || loading}
-                className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
-                style={{ background: 'linear-gradient(135deg, var(--primary), var(--accent))', color: 'white' }}
-              >
-                <Send size={14} />
-                Send
-              </button>
-            </div>
+        <div className="flex-shrink-0 p-3 md:px-8 md:pb-5">
+          <div className="max-w-3xl mx-auto card composer flex items-end gap-2 p-2">
+            <textarea
+              ref={ta}
+              value={input}
+              rows={1}
+              onChange={e => setInput(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); void send() }
+              }}
+              placeholder={messages.length ? 'Ask a follow-up…' : 'Ask about your notes…'}
+              className="flex-1 resize-none bg-transparent outline-none px-2 py-1.5 text-[15px]"
+              style={{ color: 'var(--text)' }}
+              aria-label="Your question"
+            />
+            <button
+              onClick={() => void send()}
+              disabled={!input.trim() || loading}
+              className="btn btn-primary w-9 h-9 p-0 rounded-xl flex-shrink-0"
+              aria-label="Send"
+            >
+              {loading ? <Loader2 size={16} className="animate-spin" /> : <ArrowUp size={16} />}
+            </button>
           </div>
         </div>
       </div>

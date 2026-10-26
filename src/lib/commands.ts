@@ -47,11 +47,11 @@ Only state facts present in the user's input or the retrieved context — do NOT
 export const LOCAL_COMMANDS: LocalCommand[] = [
   {
     id: 'synthesize',
-    title: 'Synthesize',
-    desc: 'Pull together a topic, or recap a time period',
+    title: 'Write a summary',
+    desc: 'Pull everything on a topic together, or recap a week',
     icon: 'Layers',
     mode: 'local-model',
-    inputLabel: 'A topic, or a time period',
+    inputLabel: 'What should the summary be about?',
     inputPlaceholder: 'e.g. everything I know about local AI / RAG — or "this week"',
     retrieveK: 7,
     instructions: `Read the retrieved notes and produce ONE coherent note, basing it ONLY on the retrieved
@@ -63,8 +63,8 @@ context — never fabricate. Decide which kind of output the user's input asks f
   },
   {
     id: 'health',
-    title: 'Vault Health',
-    desc: 'Scan vault structure for issues',
+    title: 'Health check',
+    desc: 'Find broken links and notes that are missing details',
     icon: 'Activity',
     mode: 'local-deterministic',
     inputLabel: '',
@@ -74,8 +74,8 @@ context — never fabricate. Decide which kind of output the user's input asks f
   },
   {
     id: 'interlink',
-    title: 'Interlink',
-    desc: 'Grow the graph — add wikilinks & resolve broken links',
+    title: 'Connect notes',
+    desc: 'Link notes that mention each other, and fill in missing ones',
     icon: 'Network',
     mode: 'local-proposal',
     inputLabel: '',

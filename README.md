@@ -66,8 +66,9 @@ Everything else is filesystem-only.
 
 The app runs on your laptop; your phone is just a browser pointed at it (the model stays on the
 laptop). Reach it from anywhere with Tailscale, or over the same Wi-Fi, and sync the vault between
-devices through a private GitHub repo + Obsidian mobile. The top bar's **Git Pull** / **Git Push**
-buttons keep the vault in sync, and the app auto-pulls-then-pushes on load. See
+devices through a private GitHub repo + Obsidian mobile. The app pulls then pushes on load; the
+cloud icon in the top bar shows the sync state and has **Sync now**. On a phone, a bottom tab bar
+replaces the sidebar. See
 **[MOBILE.md](MOBILE.md)** for the full walkthrough.
 
 ## Stack
@@ -99,15 +100,16 @@ See [SETUP.md](SETUP.md) for per-machine model recommendations.
 
 | Page | What it does |
 |------|--------------|
-| **Dashboard** | Vault stats, recent files, quick capture, AI briefing cards |
-| **Chat** | Ask the vault (hybrid retrieval, multi-turn, sessions) or flip to **Edit** to change it. Answers cite source notes; edits are diffs you approve |
-| **Curate** | Paste raw notes / a meeting summary; the local model proposes multi-file updates (project page, daily note, people, decisions) following the AI-first conventions. Review per-file diffs, approve, apply — logged to `Logs/YYYY-MM-DD.md` and re-indexed |
+| **⌘K** | One box from anywhere: find a note by name or content, ask a question, save a thought, jump to a page or tool |
+| **Home** | Greeting + one input: Enter asks your notes, ⌘Enter jots the text into today's daily note (append-only). "Waiting for you" tiles (new reads, overnight suggestions, notes to tidy), the briefing, recently edited notes, and what changed |
+| **Ask** | Ask the vault (hybrid retrieval, multi-turn, sessions). Answers render as formatted text and cite the notes they're based on; **Save as note** turns a conversation into a reviewed note |
+| **Add note** | Paste raw notes / a meeting summary; the local model proposes multi-file updates (project page, daily note, people, decisions) following the AI-first conventions. Review per-file diffs, approve, apply — logged to `Logs/YYYY-MM-DD.md` and re-indexed |
 | **Import** | Bulk-build a vault from a folder of exports (Markdown/Notion/Evernote/`.docx`/PDF/`.csv`…), batch-reviewed |
-| **Inbox** | New papers and articles from your sources (arXiv searches, RSS/Atom feeds), ranked by how close they are to your vault and to what you kept before. Swipe right to keep: the item is saved as a new note under `Knowledge/Sources/<Section>/`. Swipe left to skip: future ranking learns from it. Swipe down to park it for later. |
-| **Morning briefing** | Built every morning (time set under Inbox → Sources) from the best new inbox items per section, with a sentence on why each matters to you. Shown as the first dashboard briefing tab. |
-| **Review** | Proposals the overnight caretaker queued for approval |
-| **Commands** | 10 local workflows: Daily · Meeting · Person · Project · Task · Dev Log · Board · Recap · Synthesize · Vault Health · Interlink |
-| **Explorer / Search** | File tree + Markdown preview with live `[[wikilinks]]`; full-text search |
+| **Inbox → To read** | New papers and articles from your sources (arXiv searches, RSS/Atom feeds), ranked by how close they are to your vault and to what you kept before. Swipe right to keep: the item is saved as a new note under `Knowledge/Sources/<Section>/`. Swipe left to skip: future ranking learns from it. Swipe down to park it for later. |
+| **Morning briefing** | Built every morning (time set under Inbox → Sources) from the best new inbox items per section, with a sentence on why each matters to you. Shown on Home. |
+| **Inbox → Suggestions** | Proposals the overnight caretaker queued for approval (`/review` redirects here) |
+| **Tools** | Write a summary (topic or time period) · Health check · Connect notes |
+| **Notes** | Filterable file tree + reader with clickable `[[wikilinks]]`, folded properties, Connections, and **Open in Obsidian** |
 
 ## How RAG works
 
@@ -142,7 +144,8 @@ to 1.00, though only 4 probes, since the vault has two People notes. It also hel
 but lets the answer prompt shrink from ~5–7k to ~2k tokens, so time-to-first-token still drops by about
 half on a 16 GB Mac.
 
-`Sync Index` (top bar) does an incremental re-embed of only notes whose mtime changed.
+The index follows file changes on its own (a watcher re-embeds changed notes). The sync popover in the
+top bar has **Update** for an explicit incremental re-embed of notes whose mtime changed.
 `POST /api/index/rebuild` does a full rebuild.
 
 ## Inbox & morning briefing
@@ -182,7 +185,7 @@ Note types come from `type:` in the frontmatter, or from the folder when that's 
 person, `Projects/` → project…). The type vocabulary is defined in
 [`src/lib/schema.ts`](src/lib/schema.ts) and mirrors `_CLAUDE.md`.
 
-- **Explorer → Connections:** below each note, shows its typed relations, mentions, links that don't
+- **Notes → Connections:** below each note, shows its typed relations, mentions, links that don't
   resolve to a note yet, and backlinks.
 - **Health:** flags relations pointing at the wrong kind of note (for example `related-people` linking
   a meeting) and notes with no links in or out.
@@ -190,7 +193,9 @@ person, `Projects/` → project…). The type vocabulary is defined in
   relationships across notes, e.g. meeting → project → person.
 - **Graph boost (Settings, off by default):** search candidates linked to the top results get an extra
   vote in the ranking. Compare `hybrid` with `hybrid+graph` in `npm run eval:retrieval` before turning
-  it on.
+  it on. On a 75-note vault (29 generated questions, qwen3-embedding + qwen3-reranker 0.6b) it hurt:
+  hit@1 0.79 → 0.59 without the reranker, and no change (0.90) with it, at +0.7 s per query. Linked
+  notes still reach the answer prompt as context, which is where the graph helps.
 
 ## Curation conventions
 
@@ -210,7 +215,7 @@ behind a reviewable diff:
   or *"move the decisions from the meeting note into the project page"* — the model
   proposes the moves/edits, you approve each in the diff view
   (`src/app/api/curate/apply/route.ts`, `src/components/shared/ProposalReview.tsx`).
-- **Health auto-fix.** Commands → **Vault Health** → **Auto-fix structure**
+- **Health auto-fix.** Tools → **Health check** → **Auto-fix structure**
   deterministically adds missing frontmatter and a "For future Claude" preamble
   (summarised from each note's own first paragraph), up to 25 notes at a time,
   content preserved verbatim, **and creates stub notes so broken `[[links]]`
@@ -317,11 +322,11 @@ is running — no browser tab needed. All local:
     (add missing frontmatter / "For future Claude" preamble, body preserved verbatim).
   - **Queued for review (model-driven):** a curation proposal over the notes that changed in the last
     24h (link related notes, file strays via `move`, merge duplicates, synthesize a `Knowledge/` note
-    when warranted). It is **never written unattended** — it lands in the **Review** queue.
+    when warranted). It is **never written unattended** — it lands in **Inbox → Suggestions**.
   - A summary is appended to `Logs/YYYY-MM-DD.md`. If the server was down past the hour, it catches up
     on its first check after starting (state in `data/scheduler.json`).
 
-**Review queue** (sidebar → **Review**, with a count badge). Proposals the overnight caretaker prepared
+**Suggestions** (sidebar → **Inbox → Suggestions**; the Inbox badge counts them). Proposals the overnight caretaker prepared
 but did not write. Open each, approve/reject the diffs (`/api/pending`, `data/pending/*.json`,
 gitignored). This keeps the propose→review→approve safety model even for unattended runs.
 

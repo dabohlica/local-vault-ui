@@ -12,9 +12,9 @@
 
 :root {
   /* surfaces */
-  --bg-base: #FAFAFA;
+  --bg-base: #F7F7F5;
   --bg-surface: #FFFFFF;
-  --bg-elevated: #FFF6F0;
+  --bg-elevated: #F1F1EF;
   --border: rgba(0, 0, 0, 0.10);
   --border-subtle: rgba(0, 0, 0, 0.06);
 
@@ -26,9 +26,9 @@
   --teal: #1D9B6C;
 
   /* text */
-  --text: #1A1A2E;
-  --text-muted: #4A4A6A;
-  --text-subtle: #8A8AAA;
+  --text: #1C1C21;
+  --text-muted: #4B4B57;
+  --text-subtle: #85858F;
 
   /* status */
   --success: #1D9B6C;
@@ -46,11 +46,12 @@
   /* markdown accents */
   --md-h3: #7C5CDB;
   --md-code-text: #C2410C;
-  --md-code-bg: #FFF1E8;
+  --md-code-bg: #F4F1EE;
+  --shadow-pop: 0 1px 2px rgba(0,0,0,0.04), 0 12px 32px rgba(0,0,0,0.10);
 }
 
 html.dark {
-  --bg-base: #1B1B1F;
+  --bg-base: #18181B;
   --bg-surface: #232329;
   --bg-elevated: #2C2C34;
   --border: rgba(255, 255, 255, 0.10);
@@ -80,6 +81,7 @@ html.dark {
   --md-h3: #C4B5FD;
   --md-code-text: #FDBA74;
   --md-code-bg: #2C2C34;
+  --shadow-pop: 0 1px 2px rgba(0,0,0,0.3), 0 12px 32px rgba(0,0,0,0.45);
 }
 
 * {
@@ -101,12 +103,40 @@ body {
   transition: background-color 250ms ease, color 250ms ease;
 }
 
-/* Brand gradient text — used on page titles, diconium-style */
+/* Brand gradient text — reserved for the occasional accent, not page titles. */
 .gradient-text {
   background: var(--grad-brand);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+}
+
+/* App chrome — in the components layer so Tailwind utilities (p-0, text-xs…) override them. */
+@layer components {
+/* App chrome */
+.shadow-pop { box-shadow: var(--shadow-pop); }
+.hover-surface:hover { background: var(--bg-elevated); }
+.nav-link { color: var(--text-muted); transition: background-color 120ms ease, color 120ms ease; }
+.nav-link:hover { background: var(--bg-elevated); color: var(--text); }
+.nav-link[data-active] { background: var(--primary-tint); color: var(--primary); }
+
+/* Full-height pages (chat, notes) fill the space between top bar and tab bar. */
+.page-fill { height: calc(100dvh - 56px - 16px - 96px); }
+@media (min-width: 768px) { .page-fill { height: calc(100dvh - 56px - 64px); } }
+
+/* Buttons */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; border-radius: 0.75rem;
+  font-size: 0.875rem; font-weight: 600; padding: 0.55rem 1rem; transition: background-color 120ms ease, opacity 120ms ease; }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-primary { background: var(--primary); color: #fff; }
+.btn-primary:not(:disabled):hover { background: var(--primary-hover); }
+.btn-ghost { color: var(--text-muted); border: 1px solid var(--border); background: var(--bg-surface); }
+.btn-ghost:not(:disabled):hover { background: var(--bg-elevated); color: var(--text); }
+
+/* Text inputs */
+.field { background: var(--bg-surface); border: 1px solid var(--border); color: var(--text); border-radius: 0.75rem;
+  outline: none; transition: border-color 120ms ease, box-shadow 120ms ease; font-family: inherit; }
+.field:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-tint); }
 }
 
 /* Scrollbar */
@@ -189,5 +219,21 @@ body {
      cards wiggle up and down. */
   transition: box-shadow 200ms ease, border-color 200ms ease, transform 200ms ease;
 }
-.card:hover { border-color: var(--border); transform: translateY(-2px); }
-.card-interactive:hover { transform: translateY(-3px); box-shadow: 0 16px 40px var(--card-glow); }
+.card-interactive { cursor: pointer; }
+.card-interactive:hover { border-color: var(--border); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03), 0 12px 32px rgba(0, 0, 0, 0.07); }
+
+/* Chat answers read like a message, not a document. */
+.chat-answer { font-size: 0.95rem; }
+.chat-answer p, .chat-answer li { color: var(--text); }
+.chat-answer > :first-child { margin-top: 0; }
+.chat-answer > :last-child { margin-bottom: 0; }
+.chat-answer h1, .chat-answer h2, .chat-answer h3 { font-size: 1rem; color: var(--text); border: 0; padding: 0; margin: 1rem 0 0.4rem; }
+
+/* [[wikilinks]] in the note reader */
+.markdown-body a.wikilink { text-decoration: none; border-bottom: 1px solid var(--primary-tint-strong); }
+.markdown-body a.wikilink:hover { border-bottom-color: var(--primary); }
+.wikilink-missing { color: var(--text-subtle); border-bottom: 1px dashed var(--border); cursor: help; }
+
+/* Composer boxes (home, chat): outside the layer so they beat .card */
+.card.composer { border-color: var(--border); }
+.card.composer:focus-within { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-tint); }

@@ -136,7 +136,6 @@ export function SwipeDeck({
                 </span>
                 <span>{top.sourceName}</span>
                 {top.published && <span>· {ago(top.published)}</span>}
-                {top.score !== null && <span title="Relevance to your vault and past swipes">· match {top.score.toFixed(2)}</span>}
               </div>
 
               <h2 className="text-lg font-semibold leading-snug" style={{ color: 'var(--text)' }}>{top.title}</h2>
@@ -166,7 +165,7 @@ export function SwipeDeck({
 
               {top.related.length > 0 && (
                 <div className="flex flex-col gap-1.5">
-                  <p className="text-xs font-medium" style={{ color: 'var(--text-subtle)' }}>Closest notes</p>
+                  <p className="text-xs font-medium" style={{ color: 'var(--text-subtle)' }}>Related to your notes</p>
                   <div className="flex flex-wrap gap-1.5">
                     {top.related.map(r => (
                       <Link key={r.path} href={`/explorer?file=${encodeURIComponent(r.path)}`}
@@ -182,9 +181,9 @@ export function SwipeDeck({
             </div>
 
             <div className="px-5 py-3 border-t flex items-center justify-between text-xs" style={{ borderColor: 'var(--border-subtle)', color: 'var(--text-subtle)' }}>
-              <span>{ago(top.fetchedAt) && `fetched ${ago(top.fetchedAt)}`}</span>
+              <span>{items.length > 1 ? `${items.length - 1} more after this` : 'Last one'}</span>
               <a href={top.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 font-medium" style={{ color: 'var(--primary)' }}>
-                Open source <ExternalLink size={12} />
+                Read original <ExternalLink size={12} />
               </a>
             </div>
           </div>

@@ -16,8 +16,9 @@ const ACTION_META = {
 
 // Human label per origin (where the change came from).
 const ORIGIN_LABEL: Record<string, string> = {
-  add: 'Add', chat: 'Chat', drop: 'Drop', health: 'Health', interlink: 'Interlink',
-  synthesize: 'Synthesize', caretaker: 'Caretaker', edit: 'Edit',
+  add: 'Added', chat: 'From chat', drop: 'Dropped file', health: 'Tidy-up', interlink: 'Links',
+  synthesize: 'Summary', caretaker: 'Night shift', 'nightly-curation': 'Night shift', edit: 'Edited',
+  capture: 'Jotted down', inbox: 'From inbox',
 }
 
 function dayLabel(iso: string): string {
@@ -71,20 +72,17 @@ export function ActivityTimelineCard() {
   }
 
   return (
-    <div className="card p-4 flex flex-col" style={{ maxHeight: '440px' }}>
+    <div className="card p-4 flex flex-col" style={{ maxHeight: '360px' }}>
       <div className="flex items-center gap-2 mb-4">
-        <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: 'var(--primary-tint)' }}>
-          <History size={14} style={{ color: 'var(--accent)' }} />
-        </div>
-        <h2 className="text-sm font-semibold" style={{ color: 'var(--text)' }}>Activity Timeline</h2>
-        <span className="text-xs ml-auto" style={{ color: 'var(--text-subtle)' }}>what changed, and where</span>
+        <History size={15} style={{ color: 'var(--text-subtle)' }} />
+        <h2 className="text-sm font-semibold" style={{ color: 'var(--text)' }}>What changed</h2>
       </div>
 
       {loading ? (
         <p className="text-xs" style={{ color: 'var(--text-subtle)' }}>Loading…</p>
       ) : ops.length === 0 ? (
         <p className="text-xs" style={{ color: 'var(--text-subtle)' }}>
-          No changes logged yet. Anything you add or edit will appear here for traceability.
+          Nothing yet. Everything the app writes to your vault shows up here.
         </p>
       ) : (
         <div className="flex-1 overflow-y-auto -mr-1 pr-1 space-y-4">
@@ -98,7 +96,7 @@ export function ActivityTimelineCard() {
                   <div key={`${op.ts}-${i}`} className="relative">
                     <span className="absolute -left-[15px] top-1.5 w-1.5 h-1.5 rounded-full" style={{ background: 'var(--primary)' }} />
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-xs font-mono" style={{ color: 'var(--text-subtle)' }}>{timeLabel(op.ts)}</span>
+                      <span className="text-xs" style={{ color: 'var(--text-subtle)' }}>{timeLabel(op.ts)}</span>
                       <span className="text-xs px-1.5 py-0.5 rounded-full" style={{ background: 'var(--bg-elevated)', color: 'var(--text-muted)' }}>
                         {ORIGIN_LABEL[op.origin] ?? op.origin}
                       </span>
@@ -108,7 +106,8 @@ export function ActivityTimelineCard() {
                       {op.changes.map((c, j) => {
                         const meta = ACTION_META[c.action] ?? ACTION_META.update
                         const Icon = meta.icon
-                        const label = c.action === 'move' ? `${c.from} → ${c.to}` : c.path
+                        const name = (p?: string) => (p ?? '').replace(/\.md$/, '').split('/').pop()
+                        const label = c.action === 'move' ? `${name(c.from)} → ${name(c.to)}` : name(c.path) ?? ''
                         const openPath = c.action === 'move' ? (c.to ?? c.path) : c.path
                         return (
                           <button
@@ -121,7 +120,7 @@ export function ActivityTimelineCard() {
                             onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
                           >
                             <Icon size={11} style={{ color: meta.color, flexShrink: 0 }} />
-                            <span className="text-xs truncate" style={{ color: 'var(--text-subtle)' }}>{label.replace(/\.md$/, '')}</span>
+                            <span className="text-xs truncate" title={c.path} style={{ color: 'var(--text-subtle)' }}>{label}</span>
                           </button>
                         )
                       })}

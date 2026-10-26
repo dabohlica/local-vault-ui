@@ -1,34 +1,10 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
 import { usePathname } from 'next/navigation'
-import {
-  LayoutDashboard,
-  Terminal,
-  FolderOpen,
-  Search,
-  BookOpen,
-  MessageSquare,
-  FilePlus,
-  Settings,
-  Moon,
-  Inbox,
-  X,
-} from 'lucide-react'
+import { Plus, X, Sparkles } from 'lucide-react'
 import { cn } from '@/lib/cn'
-
-const NAV_ITEMS = [
-  { href: '/', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/add', label: 'Add', icon: FilePlus },
-  { href: '/chat', label: 'Chat', icon: MessageSquare },
-  { href: '/inbox', label: 'Inbox', icon: Inbox },
-  { href: '/review', label: 'Review', icon: Moon },
-  { href: '/commands', label: 'Commands', icon: Terminal },
-  { href: '/explorer', label: 'Explorer', icon: FolderOpen },
-  { href: '/search', label: 'Search', icon: Search },
-  { href: '/setup', label: 'Settings', icon: Settings },
-]
+import { NAV, SETTINGS_ITEM, isActive, useInboxBadge, type NavItem } from './nav'
 
 export function Sidebar({
   mobileOpen = false,
@@ -38,135 +14,72 @@ export function Sidebar({
   onClose?: () => void
 }) {
   const pathname = usePathname()
-  const [vaultLabel, setVaultLabel] = useState('—')
-  const [pending, setPending] = useState(0)
-  const [inboxNew, setInboxNew] = useState(0)
-
-  useEffect(() => {
-    fetch('/api/setup/status')
-      .then(r => r.json())
-      .then((d: { vault?: { path?: string } }) => {
-        const p = d.vault?.path
-        if (p) setVaultLabel(p.split('/').filter(Boolean).pop() ?? p)
-      })
-      .catch(() => {})
-    fetch('/api/pending')
-      .then(r => r.json())
-      .then((d: { count?: number }) => setPending(d.count ?? 0))
-      .catch(() => {})
-    fetch('/api/inbox?countOnly=1')
-      .then(r => r.json())
-      .then((d: { counts?: { byStatus?: { new?: number } } }) => setInboxNew(d.counts?.byStatus?.new ?? 0))
-      .catch(() => {})
-  }, [pathname])
+  const badge = useInboxBadge()
 
   return (
     <>
-      {/* Backdrop — only on mobile while the drawer is open. */}
       {mobileOpen && (
-        <div
-          className="fixed inset-0 z-40 bg-black/50 md:hidden"
-          onClick={onClose}
-          aria-hidden
-        />
+        <div className="fixed inset-0 z-40 bg-black/40 md:hidden" onClick={onClose} aria-hidden />
       )}
 
       <aside
         className={cn(
-          'flex flex-col w-[240px] flex-shrink-0 h-screen border-r',
-          // Mobile: fixed off-canvas drawer that slides in. Desktop (md+): part
-          // of the normal flex flow, always visible.
+          'flex flex-col w-[232px] flex-shrink-0 h-screen border-r',
           'fixed inset-y-0 left-0 z-50 transition-transform duration-200 md:static md:translate-x-0',
           mobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0',
         )}
-        style={{
-          background: 'var(--bg-surface)',
-          borderColor: 'var(--border-subtle)',
-        }}
+        style={{ background: 'var(--bg-surface)', borderColor: 'var(--border-subtle)' }}
       >
-      {/* Logo */}
-      <div
-        className="flex items-center gap-3 px-5 py-5 border-b"
-        style={{ borderColor: 'var(--border-subtle)' }}
-      >
-        <div
-          className="w-8 h-8 rounded-lg flex items-center justify-center"
-          style={{ background: 'linear-gradient(135deg, var(--primary), var(--accent))' }}
-        >
-          <BookOpen size={16} className="text-white" />
+        <div className="flex items-center gap-2.5 px-4 h-14">
+          <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: 'var(--primary)' }}>
+            <Sparkles size={14} className="text-white" />
+          </div>
+          <p className="text-[15px] font-semibold tracking-tight" style={{ color: 'var(--text)' }}>Vault</p>
+          <button onClick={onClose} className="ml-auto md:hidden p-1 rounded-lg" style={{ color: 'var(--text-muted)' }} aria-label="Close navigation">
+            <X size={18} />
+          </button>
         </div>
-        <div>
-          <p className="text-sm font-semibold" style={{ color: 'var(--text)' }}>Vault UI</p>
-          <p className="text-xs" style={{ color: 'var(--text-subtle)' }}>Knowledge Steering</p>
+
+        <div className="px-3 pb-3">
+          <Link
+            href="/add"
+            className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl text-sm font-semibold transition-colors"
+            style={{ background: 'var(--primary)', color: 'white' }}
+          >
+            <Plus size={16} /> Add note
+          </Link>
         </div>
-        {/* Close button — mobile only. */}
-        <button
-          onClick={onClose}
-          className="ml-auto md:hidden p-1 rounded-lg"
-          style={{ color: 'var(--text-muted)' }}
-          aria-label="Close navigation"
-        >
-          <X size={18} />
-        </button>
-      </div>
 
-      {/* Navigation */}
-      <nav className="flex-1 px-3 py-4 space-y-1">
-        {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
-          const active = pathname === href || (href !== '/' && pathname.startsWith(href))
-          return (
-            <Link
-              key={href}
-              href={href}
-              className={cn(
-                'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150',
-                active
-                  ? 'text-white'
-                  : 'hover:text-white'
-              )}
-              style={
-                active
-                  ? {
-                      background: 'var(--icon-grad)',
-                      color: 'var(--text)',
-                      borderLeft: '2px solid var(--primary)',
-                    }
-                  : {
-                      color: 'var(--text-muted)',
-                    }
-              }
-            >
-              <Icon
-                size={18}
-                style={{ color: active ? 'var(--primary)' : 'inherit' }}
-              />
-              <span className="flex-1">{label}</span>
-              {(() => {
-                const n = href === '/review' ? pending : href === '/inbox' ? inboxNew : 0
-                return n > 0 && (
-                  <span
-                    className="text-xs font-semibold px-1.5 py-0.5 rounded-full min-w-[20px] text-center"
-                    style={{ background: 'var(--primary)', color: 'white' }}
-                  >
-                    {n > 99 ? '99+' : n}
-                  </span>
-                )
-              })()}
-            </Link>
-          )
-        })}
-      </nav>
+        <nav className="flex-1 px-3 py-1 space-y-0.5">
+          {NAV.map(item => (
+            <NavLink key={item.href} item={item} active={isActive(pathname, item.href)} count={item.badge === 'inbox' ? badge : 0} />
+          ))}
+        </nav>
 
-      {/* Footer */}
-      <div
-        className="px-5 py-4 border-t"
-        style={{ borderColor: 'var(--border-subtle)' }}
-      >
-        <p className="text-xs" style={{ color: 'var(--text-subtle)' }}>
-          {vaultLabel}
-        </p>
-      </div>
+        <div className="px-3 py-3 border-t" style={{ borderColor: 'var(--border-subtle)' }}>
+          <NavLink item={SETTINGS_ITEM} active={isActive(pathname, SETTINGS_ITEM.href)} count={0} />
+        </div>
       </aside>
     </>
+  )
+}
+
+function NavLink({ item, active, count }: { item: NavItem; active: boolean; count: number }) {
+  const Icon = item.icon
+  return (
+    <Link
+      href={item.href}
+      title={item.hint}
+      className="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium"
+      data-active={active || undefined}
+    >
+      <Icon size={18} strokeWidth={active ? 2.25 : 1.75} />
+      <span className="flex-1">{item.label}</span>
+      {count > 0 && (
+        <span className="text-[11px] font-semibold px-1.5 py-px rounded-full min-w-[20px] text-center" style={{ background: 'var(--primary)', color: 'white' }}>
+          {count > 99 ? '99+' : count}
+        </span>
+      )}
+    </Link>
   )
 }

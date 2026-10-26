@@ -20,12 +20,13 @@ type Props = {
   enableTags?: boolean
   // Caller supplies how to request a proposal from the given input text (+ tags).
   request: (input: string, tags: string[]) => Promise<Response>
+  initialText?: string
 }
 
 // Input box -> request a proposal -> review/approve/apply (via ProposalReview).
 // Used by the Curate page and by every local command.
-export function ProposalFlow({ inputLabel, inputPlaceholder, submitLabel = 'Propose updates', minHeight = 140, storageKey, enableTags, request }: Props) {
-  const [text, setText] = useState('')
+export function ProposalFlow({ inputLabel, inputPlaceholder, submitLabel = 'Propose updates', minHeight = 140, storageKey, enableTags, request, initialText = '' }: Props) {
+  const [text, setText] = useState(initialText)
   const [tags, setTags] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -67,14 +68,14 @@ export function ProposalFlow({ inputLabel, inputPlaceholder, submitLabel = 'Prop
   return (
     <div className="flex flex-col gap-4">
       <div className="card p-4 flex flex-col gap-3">
-        <label className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>{inputLabel}</label>
+        {inputLabel && <label className="text-sm font-medium" style={{ color: 'var(--text)' }}>{inputLabel}</label>}
         <textarea
           ref={taRef}
           value={text}
           onChange={e => setText(e.target.value)}
           placeholder={inputPlaceholder}
-          className={`${storageKey ? 'resize-y' : 'resize-none'} rounded-lg p-3 text-sm outline-none`}
-          style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text)', minHeight: `${minHeight}px`, fontFamily: 'inherit' }}
+          className={`${storageKey ? 'resize-y' : 'resize-none'} field p-3 text-[15px]`}
+          style={{ minHeight: `${minHeight}px` }}
         />
         {enableTags && (
           <div className="flex flex-col gap-1">
@@ -88,8 +89,7 @@ export function ProposalFlow({ inputLabel, inputPlaceholder, submitLabel = 'Prop
           <button
             onClick={() => void propose()}
             disabled={!text.trim() || loading}
-            className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
-            style={{ background: 'linear-gradient(135deg, var(--primary), var(--accent))', color: 'white' }}
+            className="btn btn-primary"
           >
             {loading ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
             {loading ? 'Thinking…' : submitLabel}

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
 import { CommandCard } from './CommandCard'
 import { LOCAL_COMMANDS, type LocalCommand } from '@/lib/commands'
@@ -11,9 +11,21 @@ import { ProposalRunner } from './ProposalRunner'
 export function CommandGrid() {
   const [active, setActive] = useState<LocalCommand | null>(null)
 
+  // Deep link from Home / ⌘K: /commands?tool=health
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get('tool')
+    const cmd = LOCAL_COMMANDS.find(c => c.id === id)
+    if (cmd) setActive(cmd)
+  }, [])
+
+  function close() {
+    setActive(null)
+    window.history.replaceState(null, '', '/commands')
+  }
+
   return (
     <>
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {LOCAL_COMMANDS.map(cmd => (
           <CommandCard key={cmd.id} command={cmd} onRun={() => setActive(cmd)} />
         ))}
@@ -21,7 +33,7 @@ export function CommandGrid() {
 
       {/* Slide-over runner */}
       {active && (
-        <div className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm" onClick={() => setActive(null)} />
+        <div className="fixed inset-0 z-40 bg-black/30" onClick={close} />
       )}
       <div
         className="fixed top-0 right-0 h-full z-50 flex flex-col overflow-y-auto"
@@ -32,7 +44,7 @@ export function CommandGrid() {
           borderLeft: '1px solid var(--border)',
           transform: active ? 'translateX(0)' : 'translateX(100%)',
           transition: 'transform 250ms ease-out',
-          boxShadow: active ? '-8px 0 40px rgba(0,0,0,0.5)' : 'none',
+          boxShadow: active ? 'var(--shadow-pop)' : 'none',
         }}
       >
         {active && (
@@ -43,17 +55,13 @@ export function CommandGrid() {
             >
               <div>
                 <h3 className="text-sm font-semibold" style={{ color: 'var(--text)' }}>{active.title}</h3>
-                <p className="text-xs mt-0.5 flex items-center gap-1.5" style={{ color: 'var(--text-subtle)' }}>
-                  <span className="font-mono">/{active.id}</span>
-                  <span className="px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(16,185,129,0.12)', color: 'var(--success)' }}>
-                    local · on-device
-                  </span>
-                </p>
+                <p className="text-xs mt-0.5" style={{ color: 'var(--text-subtle)' }}>{active.desc}</p>
               </div>
               <button
-                onClick={() => setActive(null)}
-                className="p-1.5 rounded-lg transition-all duration-150 hover:scale-110"
-                style={{ color: 'var(--text-muted)', background: 'var(--bg-elevated)' }}
+                onClick={close}
+                aria-label="Close"
+                className="p-1.5 rounded-lg hover-surface"
+                style={{ color: 'var(--text-muted)' }}
               >
                 <X size={16} />
               </button>
@@ -66,15 +74,15 @@ export function CommandGrid() {
                 <ProposalRunner
                   key={active.id}
                   endpoint={`/api/commands/${active.id}`}
-                  runLabel="Scan & propose links"
-                  blurb="Scans your notes locally and proposes new [[wikilinks]] for unlinked mentions of existing notes, plus stub notes to resolve broken links — growing your Obsidian graph. Every change is shown as a diff to approve."
+                  runLabel="Find connections"
+                  blurb="Looks for notes that mention each other without a link, and for links that point to notes that don’t exist yet. You approve each change."
                 />
               ) : (
                 <ProposalFlow
                   key={active.id}
                   inputLabel={active.inputLabel}
                   inputPlaceholder={active.inputPlaceholder}
-                  submitLabel={`Run ${active.title}`}
+                  submitLabel="Write it"
                   request={(input) =>
                     fetch('/api/commands/local', {
                       method: 'POST',

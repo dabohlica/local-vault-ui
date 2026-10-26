@@ -6,7 +6,7 @@ export default function CuratePage() {
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <h1 className="text-xl font-bold gradient-text">Curate</h1>
+        <h1 className="text-xl md:text-2xl font-semibold tracking-tight">Curate</h1>
         <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>
           Drop in meeting notes or a summary — the local model proposes vault updates for your approval.
           Runs entirely on-device via Ollama.

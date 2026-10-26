@@ -1,37 +1,45 @@
 'use client'
 
+import { Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { ProposalFlow } from '@/components/shared/ProposalFlow'
+import { PageHeader } from '@/components/shared/PageHeader'
 
 // The single "add knowledge" entry. Paste anything — a meeting, a fact about a
 // person, a project update, a stray thought — and the local model decides which
 // note(s) to create or update (it may touch several files), then shows the changes
 // as diffs to approve. Files go through the same pipeline via global drag-and-drop.
+function AddForm() {
+  const params = useSearchParams()
+  return (
+    <ProposalFlow
+      inputLabel=""
+      inputPlaceholder={'e.g. Kickoff with Example Company — we agreed on the audit scope. Max Mustermann (their CTO) owns the tooling. Next milestone in two weeks.'}
+      submitLabel="File it"
+      storageKey="add-input-height"
+      enableTags
+      initialText={params.get('text') ?? ''}
+      request={(input, tags) =>
+        fetch('/api/curate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: input, tags }),
+        })
+      }
+    />
+  )
+}
+
 export default function AddPage() {
   return (
-    <div className="flex flex-col gap-4">
-      <div>
-        <h1 className="text-xl font-bold gradient-text">Add to vault</h1>
-        <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>
-          Just write what you want to capture — a meeting, a person, a project update, an idea. The local
-          model figures out where it belongs (a person note, a project page, today&rsquo;s daily note, a
-          board…) and may create several notes at once. You review every change as a diff before anything
-          is written. To add a file, drag &amp; drop it anywhere.
-        </p>
-      </div>
-
-      <ProposalFlow
-        inputLabel="What do you want to add?"
-        inputPlaceholder="e.g. Kickoff with Example Company — agreed on the audit scope. Max Mustermann (their CTO) owns the tooling. Next milestone in two weeks."
-        storageKey="add-input-height"
-        enableTags
-        request={(input, tags) =>
-          fetch('/api/curate', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text: input, tags }),
-          })
-        }
+    <div className="max-w-3xl mx-auto">
+      <PageHeader
+        title="Add a note"
+        subtitle="Write it the way you’d tell a colleague. It gets filed into the right notes (people, projects, today’s log), and you see every change before it’s saved. To add a file, drop it anywhere."
       />
+      <Suspense fallback={null}>
+        <AddForm />
+      </Suspense>
     </div>
   )
 }

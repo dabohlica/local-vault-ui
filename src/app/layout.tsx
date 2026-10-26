@@ -4,8 +4,8 @@ import { ToastProvider } from '@/components/shared/Toast'
 import { AppShell } from '@/components/layout/AppShell'
 
 export const metadata: Metadata = {
-  title: 'Vault UI — Knowledge Steering',
-  description: 'Personal knowledge vault steering interface',
+  title: 'Vault',
+  description: 'Your notes, with a local assistant',
 }
 
 // Render at device width on phones (instead of a zoomed-out desktop), and let

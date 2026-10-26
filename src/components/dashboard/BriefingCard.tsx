@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { RefreshCw, Brain } from 'lucide-react'
+import { RefreshCw, Sunrise } from 'lucide-react'
 
 type BriefingMeta = { path: string; title: string; date: string; tags: string[] }
 
@@ -84,25 +84,24 @@ export function BriefingCard() {
   useEffect(() => { if (active) void loadContent(active) }, [active, loadContent])
 
   return (
-    <div className="card col-span-2 flex flex-col p-5" style={{ minHeight: '320px' }}>
+    <div id="briefing" className="card flex flex-col p-5 scroll-mt-4" style={{ minHeight: '280px', maxHeight: '640px' }}>
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: 'var(--primary-tint)' }}>
-            <Brain size={15} style={{ color: 'var(--primary)' }} />
-          </div>
+          <Sunrise size={16} style={{ color: 'var(--primary)' }} />
           <div>
-            <h2 className="text-sm font-semibold" style={{ color: 'var(--text)' }}>Briefings</h2>
+            <h2 className="text-sm font-semibold" style={{ color: 'var(--text)' }}>Briefing</h2>
             {date && <p className="text-xs" style={{ color: 'var(--text-subtle)' }}>{date}</p>}
           </div>
         </div>
         <button
           onClick={() => active === MORNING ? void buildMorning() : active && void loadContent(active)}
           disabled={loading || building}
-          className="p-1.5 rounded-lg transition-all duration-150 hover:scale-110 disabled:opacity-50"
-          style={{ background: 'var(--bg-elevated)', color: 'var(--text-muted)' }}
+          className="flex items-center gap-1.5 text-xs font-medium px-2 py-1.5 rounded-lg hover-surface disabled:opacity-50"
+          style={{ color: 'var(--text-subtle)' }}
           title={active === MORNING ? 'Build today’s briefing now' : 'Refresh'}
         >
-          <RefreshCw size={14} className={loading || building ? 'animate-spin' : ''} />
+          <RefreshCw size={13} className={loading || building ? 'animate-spin' : ''} />
+          {active === MORNING ? (building ? 'Building…' : 'Refresh') : ''}
         </button>
       </div>
 
@@ -146,9 +145,13 @@ export function BriefingCard() {
         )}
         {!loading && !error && active === MORNING && !content && (
           <div className="flex flex-col items-center justify-center h-full gap-3 text-center">
-            <p className="text-sm" style={{ color: 'var(--text-subtle)' }}>
-              No morning briefing yet. Add sources in the <a href="/inbox" style={{ color: 'var(--primary)' }}>Inbox</a>; it&apos;s then built every morning.
+            <p className="text-sm max-w-xs" style={{ color: 'var(--text-subtle)' }}>
+              Every morning this shows the best new papers and articles from your sources, and why they matter to you.
             </p>
+            <div className="flex gap-2">
+              <button onClick={() => void buildMorning()} disabled={building} className="btn btn-primary text-xs">{building ? 'Building…' : 'Build one now'}</button>
+              <a href="/inbox?tab=sources" className="btn btn-ghost text-xs">Choose sources</a>
+            </div>
           </div>
         )}
         {!loading && !error && content && (

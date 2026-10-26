@@ -5,7 +5,8 @@ import { usePathname, useRouter } from 'next/navigation'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { TopBar } from '@/components/layout/TopBar'
 import { DropZoneOverlay } from '@/components/shared/DropZoneOverlay'
-import { AutoGitSync } from '@/components/layout/AutoGitSync'
+import { CommandPalette } from '@/components/layout/CommandPalette'
+import { MobileTabBar } from '@/components/layout/MobileTabBar'
 import { AutoCaretake } from '@/components/layout/AutoCaretake'
 import { ModelWarmup } from '@/components/layout/ModelWarmup'
 
@@ -46,16 +47,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <>
-      {configured && <AutoGitSync />}
       {configured && <AutoCaretake />}
       {configured && <ModelWarmup />}
       <div className="flex h-screen overflow-hidden">
         <Sidebar mobileOpen={mobileNavOpen} onClose={() => setMobileNavOpen(false)} />
-        <div className="flex flex-col flex-1 overflow-hidden">
+        <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
           <TopBar onMenuClick={() => setMobileNavOpen(true)} />
-          <main className="flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-6">{children}</main>
+          <main className="flex-1 overflow-y-auto overflow-x-hidden px-4 pt-4 pb-24 md:p-8">{children}</main>
         </div>
       </div>
+      <MobileTabBar />
+      <CommandPalette />
       <DropZoneOverlay />
     </>
   )

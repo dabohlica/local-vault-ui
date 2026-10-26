@@ -1,120 +1,48 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
-import { FileText, FolderOpen } from 'lucide-react'
+import Link from 'next/link'
+import { FileText } from 'lucide-react'
+import type { FoundNote } from '@/lib/find'
 
-export type SearchResult = {
-  path: string
-  matchingLines: string[]
+export type SearchResult = FoundNote
+
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
-type Props = {
-  results: SearchResult[]
-  query: string
+function highlight(text: string, q: string): React.ReactNode {
+  const words = q.trim().split(/\s+/).filter(w => w.length >= 2).map(escapeRegex)
+  if (!words.length) return text
+  const re = new RegExp(`(${words.join('|')})`, 'gi')
+  return text.split(re).map((part, i) =>
+    i % 2 === 1
+      ? <mark key={i} style={{ background: 'var(--primary-tint-strong)', color: 'var(--text)', borderRadius: 3, padding: '0 2px' }}>{part}</mark>
+      : part,
+  )
 }
 
-export function SearchResults({ results, query }: Props) {
-  const router = useRouter()
-
+export function SearchResults({ results, query }: { results: SearchResult[]; query: string }) {
   if (results.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 gap-3">
-        <FileText size={32} style={{ color: 'var(--text-subtle)' }} />
-        <p className="text-sm" style={{ color: 'var(--text-subtle)' }}>
-          No results for &ldquo;{query}&rdquo;
-        </p>
+      <div className="flex flex-col items-center justify-center py-16 gap-2 text-center">
+        <FileText size={28} style={{ color: 'var(--text-subtle)' }} />
+        <p className="text-sm" style={{ color: 'var(--text-subtle)' }}>No notes mention “{query}”.</p>
+        <Link href={`/chat?q=${encodeURIComponent(query)}`} className="text-sm font-medium" style={{ color: 'var(--primary)' }}>Ask about it instead →</Link>
       </div>
     )
   }
 
-  function highlight(line: string, q: string): React.ReactNode {
-    if (!q) return line
-    const regex = new RegExp(`(${escapeRegex(q)})`, 'gi')
-    const parts = line.split(regex)
-    return parts.map((part, i) =>
-      regex.test(part) ? (
-        <mark
-          key={i}
-          style={{ background: 'var(--primary-tint-strong)', color: 'var(--primary)', borderRadius: '2px', padding: '0 2px' }}
-        >
-          {part}
-        </mark>
-      ) : (
-        part
-      )
-    )
-  }
-
   return (
-    <div className="space-y-3">
-      <p className="text-xs" style={{ color: 'var(--text-subtle)' }}>
-        {results.length} file{results.length !== 1 ? 's' : ''} matched
-      </p>
-      {results.map(result => {
-        const parts = result.path.split('/')
-        const name = parts.at(-1)?.replace('.md', '') ?? result.path
-        const folder = parts.length > 1 ? parts.slice(0, -1).join('/') : ''
-
-        return (
-          <button
-            key={result.path}
-            onClick={() => router.push(`/explorer?file=${encodeURIComponent(result.path)}`)}
-            className="w-full text-left p-4 rounded-xl border transition-all duration-150 hover:scale-[1.01]"
-            style={{
-              background: 'var(--bg-surface)',
-              borderColor: 'var(--border-subtle)',
-            }}
-            onMouseEnter={e => {
-              (e.currentTarget as HTMLElement).style.borderColor = 'var(--border)'
-              ;(e.currentTarget as HTMLElement).style.background = 'var(--bg-elevated)'
-            }}
-            onMouseLeave={e => {
-              (e.currentTarget as HTMLElement).style.borderColor = 'var(--border-subtle)'
-              ;(e.currentTarget as HTMLElement).style.background = 'var(--bg-surface)'
-            }}
-          >
-            <div className="flex items-start gap-3">
-              <div
-                className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5"
-                style={{ background: 'var(--primary-tint)' }}
-              >
-                <FileText size={14} style={{ color: 'var(--primary)' }} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold" style={{ color: 'var(--text)' }}>{name}</p>
-                {folder && (
-                  <div className="flex items-center gap-1 mt-0.5">
-                    <FolderOpen size={11} style={{ color: 'var(--text-subtle)' }} />
-                    <p className="text-xs" style={{ color: 'var(--text-subtle)' }}>{folder}</p>
-                  </div>
-                )}
-                {result.matchingLines.length > 0 && (
-                  <div className="mt-2 space-y-1">
-                    {result.matchingLines.slice(0, 3).map((line, i) => (
-                      <p
-                        key={i}
-                        className="text-xs font-mono truncate"
-                        style={{ color: 'var(--text-muted)' }}
-                      >
-                        {highlight(line.trim(), query)}
-                      </p>
-                    ))}
-                    {result.matchingLines.length > 3 && (
-                      <p className="text-xs" style={{ color: 'var(--text-subtle)' }}>
-                        +{result.matchingLines.length - 3} more matches
-                      </p>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-          </button>
-        )
-      })}
+    <div className="flex flex-col gap-2">
+      {results.map(r => (
+        <Link key={r.path} href={`/explorer?file=${encodeURIComponent(r.path)}`} className="card card-interactive px-4 py-3 block">
+          <div className="flex items-baseline gap-2 min-w-0">
+            <span className="text-sm font-semibold truncate" style={{ color: 'var(--text)' }}>{highlight(r.title, query)}</span>
+            {r.folder && <span className="text-xs truncate" style={{ color: 'var(--text-subtle)' }}>{r.folder}</span>}
+          </div>
+          {r.snippet && <p className="text-xs mt-1 line-clamp-2" style={{ color: 'var(--text-muted)' }}>{highlight(r.snippet, query)}</p>}
+        </Link>
+      ))}
     </div>
   )
-}
-
-function escapeRegex(str: string): string {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }

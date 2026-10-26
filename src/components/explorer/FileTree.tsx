@@ -14,9 +14,17 @@ type FileNode = {
 type Props = {
   selectedPath: string | null
   onSelect: (path: string) => void
+  filter?: string
 }
 
-export function FileTree({ selectedPath, onSelect }: Props) {
+// Keep files whose name/path contains the filter (and the folders leading to them).
+function prune(node: FileNode, q: string): FileNode | null {
+  if (node.type === 'file') return node.path.toLowerCase().includes(q) ? node : null
+  const children = (node.children ?? []).map(c => prune(c, q)).filter((c): c is FileNode => !!c)
+  return children.length ? { ...node, children } : null
+}
+
+export function FileTree({ selectedPath, onSelect, filter = '' }: Props) {
   const [tree, setTree] = useState<FileNode | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -53,15 +61,22 @@ export function FileTree({ selectedPath, onSelect }: Props) {
 
   if (!tree) return null
 
+  const q = filter.trim().toLowerCase()
+  const shown = q ? prune(tree, q) : tree
+
   return (
-    <div className="overflow-y-auto h-full py-2">
-      {tree.children?.map(node => (
+    <div className="overflow-y-auto h-full py-2 px-1">
+      {!shown?.children?.length && (
+        <p className="text-xs px-3 py-4" style={{ color: 'var(--text-subtle)' }}>No note names match. Press ⌘K to search inside notes.</p>
+      )}
+      {shown?.children?.map(node => (
         <TreeNode
-          key={node.path}
+          key={`${q}:${node.path}`}
           node={node}
           depth={0}
           selectedPath={selectedPath}
           onSelect={onSelect}
+          open={!!q}
         />
       ))}
     </div>
@@ -73,13 +88,16 @@ function TreeNode({
   depth,
   selectedPath,
   onSelect,
+  open = false,
 }: {
   node: FileNode
   depth: number
   selectedPath: string | null
   onSelect: (path: string) => void
+  open?: boolean
 }) {
-  const [expanded, setExpanded] = useState(depth < 1)
+  // Expand folders on the way to the open note, and everything while filtering.
+  const [expanded, setExpanded] = useState(open || (!!selectedPath && selectedPath.startsWith(node.path + '/')))
 
   const isSelected = node.path === selectedPath
   const indent = depth * 12
@@ -89,7 +107,7 @@ function TreeNode({
       <div>
         <button
           onClick={() => setExpanded(e => !e)}
-          className="w-full flex items-center gap-1.5 px-2 py-1.5 text-xs transition-all duration-150 text-left hover:opacity-80"
+          className="w-full flex items-center gap-1.5 px-2 py-1.5 text-[13px] text-left rounded-md hover-surface"
           style={{
             paddingLeft: `${8 + indent}px`,
             color: 'var(--text-muted)',
@@ -101,11 +119,11 @@ function TreeNode({
             <ChevronRight size={12} style={{ flexShrink: 0 }} />
           )}
           {expanded ? (
-            <FolderOpen size={13} style={{ color: 'var(--warning)', flexShrink: 0 }} />
+            <FolderOpen size={14} style={{ color: 'var(--text-subtle)', flexShrink: 0 }} />
           ) : (
-            <Folder size={13} style={{ color: 'var(--warning)', flexShrink: 0 }} />
+            <Folder size={14} style={{ color: 'var(--text-subtle)', flexShrink: 0 }} />
           )}
-          <span className="truncate font-medium">{node.name}</span>
+          <span className="truncate">{node.name}</span>
         </button>
         {expanded && node.children && (
           <div>
@@ -116,6 +134,7 @@ function TreeNode({
                 depth={depth + 1}
                 selectedPath={selectedPath}
                 onSelect={onSelect}
+                open={open}
               />
             ))}
           </div>
@@ -128,8 +147,8 @@ function TreeNode({
     <button
       onClick={() => onSelect(node.path)}
       className={cn(
-        'w-full flex items-center gap-1.5 px-2 py-1.5 text-xs transition-all duration-150 text-left',
-        isSelected ? 'rounded-lg' : 'hover:opacity-80'
+        'w-full flex items-center gap-1.5 px-2 py-1.5 text-[13px] text-left rounded-md',
+        !isSelected && 'hover-surface'
       )}
       style={{
         paddingLeft: `${8 + indent}px`,

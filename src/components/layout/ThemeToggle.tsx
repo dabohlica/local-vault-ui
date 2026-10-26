@@ -24,11 +24,11 @@ export function ThemeToggle() {
       onClick={toggle}
       aria-label="Toggle theme"
       title={dark ? 'Switch to light' : 'Switch to dark'}
-      className="flex items-center justify-center w-9 h-9 rounded-lg transition-all duration-150 hover:scale-[1.05]"
-      style={{ background: 'var(--bg-elevated)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}
+      className="flex items-center justify-center w-9 h-9 rounded-lg transition-colors hover-surface"
+      style={{ color: 'var(--text-subtle)' }}
     >
       {/* Avoid hydration mismatch: render a neutral icon until mounted */}
-      {mounted && dark ? <Sun size={15} /> : <Moon size={15} />}
+      {mounted && dark ? <Sun size={16} /> : <Moon size={16} />}
     </button>
   )
 }
