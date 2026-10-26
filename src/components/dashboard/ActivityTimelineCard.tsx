@@ -18,7 +18,7 @@ const ACTION_META = {
 const ORIGIN_LABEL: Record<string, string> = {
   add: 'Added', chat: 'From chat', drop: 'Dropped file', health: 'Tidy-up', interlink: 'Links',
   synthesize: 'Summary', caretaker: 'Night shift', 'nightly-curation': 'Night shift', edit: 'Edited',
-  capture: 'Jotted down', inbox: 'From inbox',
+  capture: 'Jotted down', inbox: 'From inbox', recap: 'Recap',
 }
 
 function dayLabel(iso: string): string {

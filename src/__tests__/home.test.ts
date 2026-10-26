@@ -111,3 +111,34 @@ describe('shouldHeal (index self-heal backoff)', async () => {
     expect(shouldHeal(false, false, now - 11 * 60_000, now)).toBe(true)
   })
 })
+
+describe('recapWindow', async () => {
+  const { recapWindow, recapDue } = await import('@/lib/recap')
+  const ymd = (d: Date) => d.toLocaleDateString('en-CA')
+  it('covers Monday..Sunday ending at the last Sunday 17:00', () => {
+    const w = recapWindow(new Date(2026, 9, 26, 9, 0)) // Mon 26 Oct, 09:00
+    expect(w.week).toBe('2026-10-25')
+    expect(ymd(w.start)).toBe('2026-10-19')
+    expect(ymd(w.end)).toBe('2026-10-25')
+  })
+  it('switches to the new week only after Sunday 17:00', () => {
+    expect(recapWindow(new Date(2026, 10, 1, 16, 59)).week).toBe('2026-10-25') // Sun 1 Nov, before 17:00
+    expect(recapWindow(new Date(2026, 10, 1, 17, 0)).week).toBe('2026-11-01')
+  })
+  it('is due once per week', () => {
+    const now = new Date(2026, 9, 28, 12, 0)
+    expect(recapDue(now, null)).toBe(true)
+    expect(recapDue(now, '2026-10-25')).toBe(false)
+    expect(recapDue(now, '2026-10-18')).toBe(true)
+  })
+})
+
+describe('dropSection', async () => {
+  const { dropSection } = await import('@/lib/recap')
+  const md = '### What you worked on\n- a\n\n### New reading\n- not really\n\n### Open loops\n- b\n'
+  it('removes a middle or last section, keeps the rest', () => {
+    expect(dropSection(md, 'New reading')).toBe('### What you worked on\n- a\n\n### Open loops\n- b\n')
+    expect(dropSection('### A\n- a\n### New reading\n- x\n', 'New reading')).toBe('### A\n- a\n')
+    expect(dropSection(md, 'Missing')).toBe(md)
+  })
+})

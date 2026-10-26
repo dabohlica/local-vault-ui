@@ -29,13 +29,14 @@ export type SchedulerState = {
   lastFullSummary: string | null
   lastFeedMs: number
   lastBriefingDate: string // YYYY-MM-DD (local)
+  lastRecapWeek: string    // recapWindow().week of the last weekly recap
 }
 
 type SchedulerGlobals = { timer: ReturnType<typeof setInterval> | null; running: boolean }
 const G = ((globalThis as unknown as { __vaultScheduler?: SchedulerGlobals }).__vaultScheduler ??= { timer: null, running: false })
 
 const EMPTY_STATE: SchedulerState = {
-  lastSyncMs: 0, lastFullDate: '', lastFullAt: null, lastFullSummary: null, lastFeedMs: 0, lastBriefingDate: '',
+  lastSyncMs: 0, lastFullDate: '', lastFullAt: null, lastFullSummary: null, lastFeedMs: 0, lastBriefingDate: '', lastRecapWeek: '',
 }
 
 function todayStr(now = new Date()): string {
@@ -118,6 +119,15 @@ async function runFeedJobs(now: Date, cfg: ReturnType<typeof getConfig>): Promis
   }
 }
 
+// Weekly recap: once per week, Sunday evening or on the first tick after.
+async function runRecapJob(now: Date): Promise<void> {
+  const { recapDue, recapWindow, generateRecap } = await import('@/lib/recap')
+  if (!recapDue(now, readSchedulerState().lastRecapWeek || null)) return
+  // Mark first so a model failure doesn't retry every 5 minutes; "Build now" on Home retries.
+  writeSchedulerState({ lastRecapWeek: recapWindow(now).week })
+  await generateRecap(now)
+}
+
 async function tick(): Promise<void> {
   if (G.running) return
   const cfg = getConfig()
@@ -134,6 +144,7 @@ async function tick(): Promise<void> {
     void healIndex().catch(() => {})
     await runCaretakeJobs(new Date(), cfg).catch(() => {})
     await runFeedJobs(new Date(), cfg).catch(() => {})
+    await runRecapJob(new Date()).catch(() => {})
   } finally {
     G.running = false
   }

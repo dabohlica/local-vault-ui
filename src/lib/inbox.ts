@@ -466,9 +466,13 @@ export function decideItem(id: string, decision: Decision): { item: InboxItem; n
   let noteHash: string | null = row.note_hash
   let noteKept: boolean | undefined
   if (decision === 'accepted' && !notePath) {
-    const written = writeAcceptedNote(getItem(id)!)
+    const item = getItem(id)!
+    const written = writeAcceptedNote(item)
     notePath = written.notePath
     noteHash = written.hash
+    // Background: compare its claims with the closest notes (src/lib/conflicts.ts).
+    const { notePath: p, hash: h } = written
+    void import('@/lib/conflicts').then(m => m.queueConflictCheck(item, p, h)).catch(() => {})
   } else if (decision !== 'accepted' && notePath) {
     noteKept = fileHash(notePath) !== noteHash
     if (!noteKept) {

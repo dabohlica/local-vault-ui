@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react'
 import { Inbox, Sparkles, HeartPulse, CheckCircle2, Loader2, AlertCircle, FileText, ChevronRight, type LucideIcon } from 'lucide-react'
 import { Composer } from '@/components/home/Composer'
 import { BriefingCard } from '@/components/dashboard/BriefingCard'
+import { RecapCard } from '@/components/home/RecapCard'
 import { ActivityTimelineCard } from '@/components/dashboard/ActivityTimelineCard'
 
 type Home = {
@@ -58,7 +59,7 @@ export default function HomePage() {
 
   const tiles: Array<{ n: number; icon: LucideIcon; title: string; sub: string; href: string }> = home ? [
     { n: home.inboxNew, icon: Inbox, title: `${home.inboxNew} new to read`, sub: 'Papers & articles picked for you', href: '/inbox' },
-    { n: home.suggestions, icon: Sparkles, title: `${home.suggestions} suggestion${home.suggestions === 1 ? '' : 's'}`, sub: 'Edits prepared overnight, waiting for your OK', href: '/inbox?tab=suggestions' },
+    { n: home.suggestions, icon: Sparkles, title: `${home.suggestions} suggestion${home.suggestions === 1 ? '' : 's'}`, sub: 'Changes waiting for your OK', href: '/inbox?tab=suggestions' },
     { n: home.needsAttention, icon: HeartPulse, title: `${home.needsAttention} note${home.needsAttention === 1 ? '' : 's'} to tidy`, sub: 'Broken links, missing details', href: '/commands?tool=health' },
   ].filter(t => t.n > 0) : []
 
@@ -118,7 +119,8 @@ export default function HomePage() {
       </section>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-2 flex flex-col gap-6">
+          <RecapCard />
           <BriefingCard />
         </div>
         <div className="flex flex-col gap-6">
