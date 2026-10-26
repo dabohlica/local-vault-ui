@@ -6,6 +6,7 @@ import {
   FolderOpen, Cpu, Database, CheckCircle2, XCircle, Loader2, Download,
   ArrowRight, BookOpen, RefreshCw, Sparkles, Clock,
 } from 'lucide-react'
+import { CompanionPicker } from '@/components/setup/CompanionPicker'
 import { DiagnosticsCard } from '@/components/setup/DiagnosticsCard'
 
 type Status = {
@@ -273,6 +274,8 @@ export default function SetupPage() {
           </p>
         </div>
       )}
+
+      <CompanionPicker />
 
       {/* Step 1 — Vault */}
       <StepCard n={1} title="Connect your vault" icon={FolderOpen} done={vaultReady}>

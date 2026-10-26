@@ -172,7 +172,7 @@ export function ProposalReview({ result, onApplied, onDiscard }: Props) {
         style={{ borderColor: 'var(--border-subtle)' }}
       >
         <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
-          Proposed changes — review &amp; apply below
+          Here’s what I’d change — tick what you want
         </span>
         <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: 'var(--bg-elevated)', color: 'var(--text-subtle)' }}>
           {changes.length}

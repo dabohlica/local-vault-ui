@@ -74,7 +74,7 @@ export function SuggestionsPanel({ onChange }: { onChange?: () => void }) {
           <Inbox size={26} style={{ color: 'var(--text-subtle)' }} />
           <p className="text-sm font-medium" style={{ color: 'var(--text)' }}>No suggestions right now</p>
           <p className="text-xs max-w-sm" style={{ color: 'var(--text-subtle)' }}>
-            Overnight, the app looks at what changed in your notes and prepares improvements. They wait here until you approve them — nothing is changed without you.
+            When I notice something worth changing — a missing link, a conflict with something new — I prepare it here. Nothing changes without your OK.
           </p>
         </div>
       ) : (

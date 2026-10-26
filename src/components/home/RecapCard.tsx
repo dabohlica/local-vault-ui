@@ -97,8 +97,8 @@ export function RecapCard() {
         <div className="flex flex-col items-start gap-2">
           <p className="text-sm" style={{ color: 'var(--text-subtle)' }}>
             {tried
-              ? 'Nothing to recap for last week — no daily notes, edits or kept reading between Monday and Sunday.'
-              : 'Every Sunday evening: what you worked on, decisions, open loops and new reading — from your own notes.'}
+              ? 'I found nothing to recap for last week — no daily notes, changes or kept reading between Monday and Sunday.'
+              : 'Every Sunday evening I’ll sum up your week: what you worked on, decisions, open loops and new reading.'}
           </p>
           <button onClick={() => void build()} className="btn btn-ghost text-xs">Build last week’s recap</button>
         </div>

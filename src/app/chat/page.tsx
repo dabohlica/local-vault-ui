@@ -10,17 +10,28 @@ import { ProposalReview, type ProposalResponse } from '@/components/shared/Propo
 import { TagPicker } from '@/components/shared/TagPicker'
 import { fetchWithRetry } from '@/lib/fetchRetry'
 import { linkWikilinks, noteHref, titleOf } from '@/lib/wikilinks'
+import { splitAskBack, type ChatMode } from '@/lib/companion'
+import { CompanionAvatar } from '@/components/companion/Avatar'
+import { useCompanion } from '@/components/companion/CompanionContext'
 
 type Citation = { path: string; heading: string; images?: string[] }
 type Message = { role: 'user' | 'assistant'; content: string; citations?: Citation[] }
 type SessionItem = { id: string; title: string; updatedAt: number; messageCount: number }
 
-const STARTERS = [
-  'What did I work on this week?',
-  'What are my open projects and their next steps?',
-  'Which decisions did I make recently, and why?',
-  'Who have I met recently?',
-]
+const STARTERS: Record<ChatMode, string[]> = {
+  ask: [
+    'What did I work on this week?',
+    'What are my open projects and their next steps?',
+    'Which decisions did I make recently, and why?',
+    'Who have I met recently?',
+  ],
+  spar: [
+    'I think I should take on another client this quarter.',
+    'Local models are good enough for all my work now.',
+    'I should drop the weekly status meeting.',
+    'My current project is on track.',
+  ],
+}
 
 function buildTranscript(messages: Message[]): string {
   const date = new Date().toISOString().slice(0, 10)
@@ -43,7 +54,11 @@ export default function ChatPage() {
 
 function ChatView() {
   const router = useRouter()
-  const handoff = useSearchParams().get('q')
+  const params = useSearchParams()
+  const handoff = params.get('q')
+  const handoffMode: ChatMode = params.get('mode') === 'spar' ? 'spar' : 'ask'
+  const companion = useCompanion()
+  const [mode, setMode] = useState<ChatMode>('ask')
   const [sessions, setSessions] = useState<SessionItem[]>([])
   const [sessionId, setSessionId] = useState<string | undefined>(undefined)
   const [messages, setMessages] = useState<Message[]>([])
@@ -109,7 +124,7 @@ function ChatView() {
 
   // `sid` defaults to the open conversation; a hand-off from Home / ⌘K passes
   // undefined to start a new one.
-  async function send(text?: string, sid: string | undefined = sessionId) {
+  async function send(text?: string, sid: string | undefined = sessionId, m: ChatMode = mode) {
     const question = (text ?? input).trim()
     if (!question || loading) return
 
@@ -129,7 +144,7 @@ function ChatView() {
       const res = await fetchWithRetry('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question, mode: 'ask', sessionId: sid }),
+        body: JSON.stringify({ question, mode: m, sessionId: sid }),
       })
       // A failure before streaming begins comes back as JSON, not NDJSON.
       if (!res.ok || !res.body) {
@@ -211,7 +226,8 @@ function ChatView() {
       router.replace('/chat')
       setSessionId(undefined); setMessages([]); setProposal(null); setError(null); setHistoryOpen(false); setSaveOpen(false)
       void loadSessions()
-      void send(handoff, undefined)
+      setMode(handoffMode)
+      void send(handoff, undefined, handoffMode)
       return
     }
     if (booted.current) return
@@ -296,7 +312,7 @@ function ChatView() {
       <div className="flex-1 min-w-0 min-h-0 flex flex-col rounded-2xl overflow-hidden border" style={{ borderColor: 'var(--border-subtle)', background: 'var(--bg-surface)' }}>
         <div className="flex items-center gap-2 px-3 md:px-5 h-12 border-b flex-shrink-0" style={{ borderColor: 'var(--border-subtle)' }}>
           <button onClick={() => setHistoryOpen(true)} className="md:hidden p-1.5 rounded-lg" style={{ color: 'var(--text-muted)' }} aria-label="Conversations"><History size={18} /></button>
-          <p className="flex-1 min-w-0 truncate text-sm font-medium" style={{ color: 'var(--text)' }}>{current?.title ?? 'New conversation'}</p>
+          <p className="flex-1 min-w-0 truncate text-sm font-medium" style={{ color: 'var(--text)' }}>{current?.title ?? `New conversation with ${companion.name}`}</p>
           {messages.length > 0 && (
             <>
               <button onClick={() => setSaveOpen(v => !v)} className="btn btn-ghost text-xs py-1.5 px-2.5" title="Turn this conversation into a note">
@@ -327,16 +343,20 @@ function ChatView() {
         <div ref={scroller} className="flex-1 overflow-y-auto px-4 md:px-8 py-6">
           <div className="max-w-3xl mx-auto flex flex-col gap-6">
             {messages.length === 0 && !loading && (
-              <div className="flex flex-col items-center text-center gap-4 pt-[8vh]">
-                <span className="w-12 h-12 rounded-2xl flex items-center justify-center" style={{ background: 'var(--primary-tint)', color: 'var(--primary)' }}>
-                  <MessageCircle size={22} />
-                </span>
-                <div>
-                  <h1 className="text-lg font-semibold" style={{ color: 'var(--text)' }}>Ask your notes</h1>
-                  <p className="text-sm mt-1" style={{ color: 'var(--text-subtle)' }}>Answers come only from your vault, with the notes they’re based on.</p>
+              <div className="flex flex-col items-center text-center gap-4 pt-[6vh]">
+                <CompanionAvatar kind={companion.kind} size={88} title={companion.name} />
+                <div className="max-w-md">
+                  <h1 className="text-lg font-semibold" style={{ color: 'var(--text)' }}>
+                    {mode === 'spar' ? 'Try me. I’ll argue back.' : `Hi, I’m ${companion.name}.`}
+                  </h1>
+                  <p className="text-sm mt-1" style={{ color: 'var(--text-subtle)' }}>
+                    {mode === 'spar'
+                      ? 'Tell me an idea, a plan or something you believe. I’ll weigh it against your own notes: what supports it, what cuts against it, and what you might be missing.'
+                      : `I’m ${companion.def.creature.replace(/^an? /, 'the ')} who keeps your notes. Ask me anything you’ve written down, and I’ll show you where it came from.`}
+                  </p>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full max-w-xl mt-2">
-                  {STARTERS.map(s => (
+                  {STARTERS[mode].map(s => (
                     <button key={s} onClick={() => void send(s)} className="text-left text-sm px-4 py-3 rounded-xl border hover-surface" style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}>
                       {s}
                     </button>
@@ -350,7 +370,10 @@ function ChatView() {
                 {m.content}
               </div>
             ) : (
-              <div key={i} className="flex flex-col gap-3 min-w-0">
+              <div key={i} className="flex gap-3 min-w-0">
+                <CompanionAvatar kind={companion.kind} size={32} thinking={streaming && i === messages.length - 1} className="mt-0.5 hidden sm:inline-flex" />
+                <div className="flex flex-col gap-3 min-w-0 flex-1">
+                <p className="text-xs font-semibold -mb-1.5" style={{ color: 'var(--text-subtle)' }}>{companion.name}</p>
                 <div className="markdown-body chat-answer">
                   <ReactMarkdown
                     remarkPlugins={[remarkGfm]}
@@ -360,9 +383,22 @@ function ChatView() {
                         : <a href={href} target="_blank" rel="noopener noreferrer">{children}</a>,
                     }}
                   >
-                    {linkWikilinks(m.content, m.citations, notePaths)}
+                    {linkWikilinks(splitAskBack(m.content).body, m.citations, notePaths)}
                   </ReactMarkdown>
                 </div>
+
+                {splitAskBack(m.content).asks.map(q => (
+                  <button
+                    key={q}
+                    onClick={() => ta.current?.focus()}
+                    className="ask-back text-left px-3.5 py-2.5 text-sm"
+                    style={{ color: 'var(--text)' }}
+                    title="Answer in the box below"
+                  >
+                    <span className="block text-[11px] font-semibold uppercase tracking-wide mb-0.5" style={{ color: 'var(--primary)' }}>{companion.name} asks</span>
+                    {q}
+                  </button>
+                ))}
 
                 {m.citations && m.citations.length > 0 && (
                   <div className="flex flex-col gap-2">
@@ -400,12 +436,14 @@ function ChatView() {
                     )}
                   </div>
                 )}
+                </div>
               </div>
             ))}
 
             {loading && !streaming && (
-              <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--text-subtle)' }}>
-                <Loader2 size={14} className="animate-spin" /> Reading your notes…
+              <div className="flex items-center gap-3 text-sm" style={{ color: 'var(--text-subtle)' }}>
+                <CompanionAvatar kind={companion.kind} size={32} thinking />
+                {mode === 'spar' ? `${companion.name} is looking for counter-arguments in your notes…` : `${companion.name} is reading your notes…`}
               </div>
             )}
             {error && <p className="text-sm rounded-xl px-4 py-3" style={{ color: 'var(--danger)', background: 'var(--bg-elevated)' }}>{error}</p>}
@@ -413,6 +451,20 @@ function ChatView() {
         </div>
 
         <div className="flex-shrink-0 p-3 md:px-8 md:pb-5">
+          <div className="max-w-3xl mx-auto flex items-center gap-1 mb-2" role="tablist" aria-label="How should I respond?">
+            {([['ask', 'Ask', 'Answers from your notes'], ['spar', 'Spar', 'Pushback from your notes']] as const).map(([k, label, hint]) => (
+              <button key={k} role="tab" aria-selected={mode === k} onClick={() => setMode(k)} title={hint}
+                className="text-xs font-medium px-3 py-1 rounded-full border transition-colors"
+                style={mode === k
+                  ? { background: 'var(--primary-tint)', borderColor: 'var(--primary)', color: 'var(--primary)' }
+                  : { borderColor: 'var(--border)', color: 'var(--text-muted)' }}>
+                {label}
+              </button>
+            ))}
+            <span className="text-[11px] ml-2 hidden sm:inline" style={{ color: 'var(--text-subtle)' }}>
+              {mode === 'spar' ? `${companion.name} will challenge what you say` : `${companion.name} answers from your notes`}
+            </span>
+          </div>
           <div className="max-w-3xl mx-auto card composer flex items-end gap-2 p-2">
             <textarea
               ref={ta}
@@ -422,7 +474,7 @@ function ChatView() {
               onKeyDown={e => {
                 if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); void send() }
               }}
-              placeholder={messages.length ? 'Ask a follow-up…' : 'Ask about your notes…'}
+              placeholder={mode === 'spar' ? 'Tell me an idea, plan or belief…' : messages.length ? 'Reply, or ask a follow-up…' : `Ask ${companion.name} about your notes…`}
               className="flex-1 resize-none bg-transparent outline-none px-2 py-1.5 text-[15px]"
               style={{ color: 'var(--text)' }}
               aria-label="Your question"

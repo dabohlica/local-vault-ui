@@ -239,3 +239,22 @@ body {
 .card.composer:focus-within { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-tint); }
 .recap h3 { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-subtle); margin: 0.9rem 0 0.3rem; }
 .recap ul { margin-bottom: 0.4rem; }
+
+/* Companion avatar: blink, thinking bob + thought bubble. */
+.companion-eyes { transform-box: fill-box; transform-origin: center; animation: companion-blink 6s infinite; }
+@keyframes companion-blink { 0%, 94%, 100% { transform: scaleY(1); } 96% { transform: scaleY(0.1); } }
+.companion-thinking svg { animation: companion-bob 1.8s ease-in-out infinite; }
+@keyframes companion-bob { 0%, 100% { transform: translateY(0) rotate(0); } 50% { transform: translateY(-6%) rotate(-3deg); } }
+.companion-bubble { position: absolute; top: -10%; right: -28%; display: flex; gap: 2px; padding: 3px 5px; border-radius: 999px;
+  background: var(--bg-surface); border: 1px solid var(--border); }
+.companion-bubble i { width: 4px; height: 4px; border-radius: 999px; background: var(--text-subtle); animation: companion-dot 1.2s infinite; }
+.companion-bubble i:nth-child(2) { animation-delay: 0.15s; }
+.companion-bubble i:nth-child(3) { animation-delay: 0.3s; }
+@keyframes companion-dot { 0%, 60%, 100% { opacity: 0.25; transform: translateY(0); } 30% { opacity: 1; transform: translateY(-2px); } }
+@media (prefers-reduced-motion: reduce) {
+  .companion-eyes, .companion-thinking svg, .companion-bubble i { animation: none; }
+}
+
+/* The companion speaking: a soft speech bubble. */
+.speech { position: relative; background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 16px; border-top-left-radius: 6px; }
+.ask-back { border-left: 3px solid var(--primary); background: var(--primary-tint); border-radius: 10px; }

@@ -15,7 +15,7 @@ function AddForm() {
     <ProposalFlow
       inputLabel=""
       inputPlaceholder={'e.g. Kickoff with Example Company — we agreed on the audit scope. Max Mustermann (their CTO) owns the tooling. Next milestone in two weeks.'}
-      submitLabel="File it"
+      submitLabel="File it for me"
       storageKey="add-input-height"
       enableTags
       initialText={params.get('text') ?? ''}
@@ -35,7 +35,7 @@ export default function AddPage() {
     <div className="max-w-3xl mx-auto">
       <PageHeader
         title="Add a note"
-        subtitle="Write it the way you’d tell a colleague. It gets filed into the right notes (people, projects, today’s log), and you see every change before it’s saved. To add a file, drop it anywhere."
+        subtitle="Tell me the way you’d tell a colleague. I’ll file it into the right notes (people, projects, today’s log) and show you every change before I save it. To add a file, drop it anywhere."
       />
       <Suspense fallback={null}>
         <AddForm />

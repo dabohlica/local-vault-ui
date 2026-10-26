@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowUp, PenLine, Loader2 } from 'lucide-react'
+import { ArrowUp, PenLine, Loader2, Swords } from 'lucide-react'
+import { useCompanion } from '@/components/companion/CompanionContext'
 import { useToast } from '@/components/shared/Toast'
 
 const STARTERS = [
@@ -18,6 +19,7 @@ const STARTERS = [
 export function Composer() {
   const router = useRouter()
   const { showToast } = useToast()
+  const companion = useCompanion()
   const [text, setText] = useState('')
   const [saving, setSaving] = useState(false)
   const ta = useRef<HTMLTextAreaElement>(null)
@@ -30,10 +32,10 @@ export function Composer() {
     el.style.height = `${Math.min(el.scrollHeight, 240)}px`
   }, [text])
 
-  function ask(q = text) {
+  function ask(q = text, mode: 'ask' | 'spar' = 'ask') {
     const question = q.trim()
     if (!question) return
-    router.push(`/chat?q=${encodeURIComponent(question)}`)
+    router.push(`/chat?q=${encodeURIComponent(question)}${mode === 'spar' ? '&mode=spar' : ''}`)
   }
 
   async function jot() {
@@ -44,7 +46,7 @@ export function Composer() {
       const d = await res.json() as { path?: string; error?: string }
       if (!res.ok) throw new Error(d.error ?? 'Could not save')
       setText('')
-      showToast('Added to today’s daily note', 'success')
+      showToast('Noted — it’s in today’s daily note.', 'success')
       window.dispatchEvent(new Event('vault:updated'))
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Could not save', 'error')
@@ -69,7 +71,7 @@ export function Composer() {
             else ask()
           }}
           rows={2}
-          placeholder="Ask your notes anything, or jot something down…"
+          placeholder={`Ask ${companion.name} anything, think out loud, or jot something down…`}
           className="w-full resize-none bg-transparent outline-none px-3 pt-2 text-[15px] leading-relaxed"
           style={{ color: 'var(--text)' }}
           aria-label="Ask or jot down"
@@ -81,7 +83,10 @@ export function Composer() {
           <button onClick={() => void jot()} disabled={!has || saving} className="btn btn-ghost text-xs ml-auto sm:ml-0" title="Add to today’s daily note (⌘↵)">
             {saving ? <Loader2 size={14} className="animate-spin" /> : <PenLine size={14} />} Jot down
           </button>
-          <button onClick={() => ask()} disabled={!has} className="btn btn-primary text-xs" title="Ask your notes (↵)">
+          <button onClick={() => ask(text, 'spar')} disabled={!has} className="btn btn-ghost text-xs" title={`${companion.name} argues with your idea, using your own notes`}>
+            <Swords size={14} /> Spar
+          </button>
+          <button onClick={() => ask()} disabled={!has} className="btn btn-primary text-xs" title={`Ask ${companion.name} (↵)`}>
             Ask <ArrowUp size={14} />
           </button>
         </div>
@@ -90,7 +95,7 @@ export function Composer() {
       <div className="flex flex-wrap items-center gap-2">
         {has ? (
           <Link href={`/add?text=${encodeURIComponent(text)}`} className="text-xs font-medium" style={{ color: 'var(--primary)' }}>
-            Make this a proper note instead → (it’ll be filed into the right place, you approve first)
+            Should I file this as a proper note? → (I’ll put it in the right place; you approve first)
           </Link>
         ) : STARTERS.map(s => (
           <button key={s} onClick={() => ask(s)} className="text-xs px-3 py-1.5 rounded-full border hover-surface" style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}>

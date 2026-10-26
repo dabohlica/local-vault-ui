@@ -2,7 +2,9 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Plus, X, Sparkles } from 'lucide-react'
+import { Plus, X } from 'lucide-react'
+import { CompanionAvatar } from '@/components/companion/Avatar'
+import { useCompanion } from '@/components/companion/CompanionContext'
 import { cn } from '@/lib/cn'
 import { NAV, SETTINGS_ITEM, isActive, useInboxBadge, type NavItem } from './nav'
 
@@ -15,6 +17,7 @@ export function Sidebar({
 }) {
   const pathname = usePathname()
   const badge = useInboxBadge()
+  const companion = useCompanion()
 
   return (
     <>
@@ -30,12 +33,15 @@ export function Sidebar({
         )}
         style={{ background: 'var(--bg-surface)', borderColor: 'var(--border-subtle)' }}
       >
-        <div className="flex items-center gap-2.5 px-4 h-14">
-          <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: 'var(--primary)' }}>
-            <Sparkles size={14} className="text-white" />
+        <Link href="/chat" className="flex items-center gap-2.5 px-4 h-16" title={`Talk to ${companion.name}`}>
+          <CompanionAvatar kind={companion.kind} size={38} />
+          <div className="min-w-0">
+            <p className="text-[15px] font-semibold tracking-tight leading-tight" style={{ color: 'var(--text)' }}>{companion.name}</p>
+            <p className="text-[11px] leading-tight truncate" style={{ color: 'var(--text-subtle)' }}>{companion.def.tagline}</p>
           </div>
-          <p className="text-[15px] font-semibold tracking-tight" style={{ color: 'var(--text)' }}>Vault</p>
-          <button onClick={onClose} className="ml-auto md:hidden p-1 rounded-lg" style={{ color: 'var(--text-muted)' }} aria-label="Close navigation">
+        </Link>
+        <div className="absolute top-4 right-3 md:hidden">
+          <button onClick={onClose} className="p-1 rounded-lg" style={{ color: 'var(--text-muted)' }} aria-label="Close navigation">
             <X size={18} />
           </button>
         </div>
@@ -52,7 +58,7 @@ export function Sidebar({
 
         <nav className="flex-1 px-3 py-1 space-y-0.5">
           {NAV.map(item => (
-            <NavLink key={item.href} item={item} active={isActive(pathname, item.href)} count={item.badge === 'inbox' ? badge : 0} />
+            <NavLink key={item.href} item={item.href === '/chat' ? { ...item, label: `Ask ${companion.name}` } : item} active={isActive(pathname, item.href)} count={item.badge === 'inbox' ? badge : 0} />
           ))}
         </nav>
 

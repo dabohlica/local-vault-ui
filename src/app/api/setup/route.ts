@@ -4,6 +4,7 @@ import os from 'os'
 import path from 'path'
 import { getConfig, setConfig, unsafeVaultPathReason, type AppConfig } from '@/lib/config'
 import { resetIndex, syncIndex } from '@/lib/embeddings'
+import { COMPANIONS, resolveCompanion } from '@/lib/companion'
 
 export async function POST(req: NextRequest) {
   try {
@@ -38,6 +39,12 @@ export async function POST(req: NextRequest) {
     if (body.visionModel !== undefined) patch.visionModel = body.visionModel.trim()
     if (body.rerankModel !== undefined) patch.rerankModel = body.rerankModel.trim()
     if (body.graphExpansion !== undefined) patch.graphExpansion = !!body.graphExpansion
+    if (body.companionKind !== undefined || body.companionName !== undefined) {
+      const c = resolveCompanion(body.companionKind ?? getConfig().companionKind, body.companionName ?? getConfig().companionName)
+      patch.companionKind = c.kind
+      // Store '' for the creature's default name, so switching creature also switches name.
+      patch.companionName = c.name === COMPANIONS[c.kind].defaultName ? '' : c.name
+    }
     if (body.retrievalBudgetChars !== undefined) {
       patch.retrievalBudgetChars = Math.min(60000, Math.max(3000, Math.floor(body.retrievalBudgetChars)))
     }

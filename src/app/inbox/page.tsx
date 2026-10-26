@@ -6,6 +6,7 @@ import { SwipeDeck, type SwipeDecision } from '@/components/inbox/SwipeDeck'
 import { SourcesPanel } from '@/components/inbox/SourcesPanel'
 import { SuggestionsPanel } from '@/components/inbox/SuggestionsPanel'
 import { PageHeader } from '@/components/shared/PageHeader'
+import { useCompanion } from '@/components/companion/CompanionContext'
 import { useToast } from '@/components/shared/Toast'
 import type { InboxItem, InboxStatus, RefreshResult } from '@/lib/inbox'
 
@@ -18,6 +19,7 @@ type Job = { running: boolean; last: RefreshResult | null }
 // src/lib/inbox.ts), suggestions the night shift prepared, and items parked for later.
 export default function InboxPage() {
   const { showToast } = useToast()
+  const companion = useCompanion()
   const [tab, setTab] = useState<Tab>('new')
   const [suggestions, setSuggestions] = useState<number | null>(null)
   const [section, setSection] = useState<string | null>(null)
@@ -119,7 +121,7 @@ export default function InboxPage() {
 
   return (
     <div className="max-w-3xl mx-auto">
-      <PageHeader title="Inbox" subtitle="New reads picked for you, and changes waiting for your OK.">
+      <PageHeader title="Inbox" subtitle={`New reads ${companion.name} picked for you, and changes waiting for your OK.`}>
         {tab === 'new' && (
           <button onClick={() => void refresh()} disabled={job?.running} className="btn btn-ghost text-xs" title="Check your sources for new items now">
             <RefreshCw size={14} className={job?.running ? 'animate-spin' : ''} />
@@ -171,7 +173,7 @@ export default function InboxPage() {
               <CheckCircle2 size={28} style={{ color: 'var(--success)' }} />
               <p className="text-sm font-medium" style={{ color: 'var(--text)' }}>{tab === 'later' ? 'Nothing parked for later.' : 'All caught up.'}</p>
               <p className="text-xs max-w-sm" style={{ color: 'var(--text-subtle)' }}>
-                {lastRun ? `Last checked ${new Date(lastRun.ranAt).toLocaleString()}: ${lastRun.added} new.` : 'New reads arrive automatically from your sources.'}{' '}
+                {lastRun ? `Last checked ${new Date(lastRun.ranAt).toLocaleString()}: ${lastRun.added} new.` : `I check your sources every few hours and bring the best ones here.`}{' '}
                 {undo.length > 0 && <button onClick={() => void onUndo()} className="underline" style={{ color: 'var(--primary)' }}>Undo last</button>}
               </p>
             </div>
@@ -181,7 +183,7 @@ export default function InboxPage() {
 
           {tab === 'new' && items !== null && items.length > 0 && (
             <p className="text-xs text-center mt-6" style={{ color: 'var(--text-subtle)' }}>
-              Swipe right or press → to keep it as a note, left or ← to skip. Your choices teach it what you like.
+              Swipe right (→) and I’ll keep it as a note; left (←) to skip. I learn what you like from your choices.
             </p>
           )}
         </>

@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Search, MessageCircle, PenLine, FileText, HeartPulse, Network, Layers, Sunrise, CornerDownLeft, type LucideIcon } from 'lucide-react'
+import { Search, MessageCircle, Swords, PenLine, FileText, HeartPulse, Network, Layers, Sunrise, CornerDownLeft, type LucideIcon } from 'lucide-react'
 import { titleScore } from '@/lib/noteMatch'
 import { NAV, SETTINGS_ITEM } from './nav'
+import { useCompanion } from '@/components/companion/CompanionContext'
 
 type Note = { path: string; title: string; folder: string; mtime: number }
 type Hit = { path: string; title: string; folder: string; snippet: string }
@@ -20,6 +21,7 @@ const TOOLS: Array<{ label: string; sub: string; icon: LucideIcon; href: string;
 // ⌘K: one box to find a note, ask a question, save a thought, or jump anywhere.
 export function CommandPalette() {
   const router = useRouter()
+  const companion = useCompanion()
   const [open, setOpen] = useState(false)
   const [q, setQ] = useState('')
   const [sel, setSel] = useState(0)
@@ -70,7 +72,8 @@ export function CommandPalette() {
     const out: Entry[] = []
     if (query) {
       const actions: Entry[] = [
-        { id: 'ask', group: 'Do', label: `Ask: “${query}”`, sub: 'Answer from your notes', icon: MessageCircle, run: () => go(`/chat?q=${encodeURIComponent(query)}`) },
+        { id: 'ask', group: 'Do', label: `Ask ${companion.name}: “${query}”`, sub: 'Answered from your notes', icon: MessageCircle, run: () => go(`/chat?q=${encodeURIComponent(query)}`) },
+        { id: 'spar', group: 'Do', label: `Spar with ${companion.name}: “${query.length > 40 ? query.slice(0, 40) + '…' : query}”`, sub: 'Get pushback from your own notes', icon: Swords, run: () => go(`/chat?q=${encodeURIComponent(query)}&mode=spar`) },
         { id: 'save', group: 'Do', label: `Save as a note: “${query.length > 40 ? query.slice(0, 40) + '…' : query}”`, sub: 'Filed into the right place, you approve first', icon: PenLine, run: () => go(`/add?text=${encodeURIComponent(query)}`) },
       ]
       const named = notes
@@ -94,14 +97,14 @@ export function CommandPalette() {
       if (nameFirst) out.push(...actions)
       const lq = query.toLowerCase()
       for (const t of TOOLS) if ((t.label + ' ' + t.keys).toLowerCase().includes(lq)) out.push({ id: `tool:${t.href}`, group: 'Tools', label: t.label, sub: t.sub, icon: t.icon, run: () => go(t.href) })
-      for (const n of [...NAV, SETTINGS_ITEM]) if (n.label.toLowerCase().startsWith(lq)) out.push({ id: `go:${n.href}`, group: 'Go to', label: n.label, sub: n.hint, icon: n.icon, run: () => go(n.href) })
+      for (const n of [...NAV, SETTINGS_ITEM]) if (n.label.toLowerCase().startsWith(lq) || (n.href === '/chat' && companion.name.toLowerCase().startsWith(lq))) out.push({ id: `go:${n.href}`, group: 'Go to', label: n.href === '/chat' ? `Ask ${companion.name}` : n.label, sub: n.hint, icon: n.icon, run: () => go(n.href) })
     } else {
       for (const n of notes.slice(0, 5)) out.push({ id: `n:${n.path}`, group: 'Recent notes', label: n.title, sub: n.folder, icon: FileText, run: () => openNote(n.path) })
-      for (const n of [...NAV, SETTINGS_ITEM]) out.push({ id: `go:${n.href}`, group: 'Go to', label: n.label, sub: n.hint, icon: n.icon, run: () => go(n.href) })
+      for (const n of [...NAV, SETTINGS_ITEM]) out.push({ id: `go:${n.href}`, group: 'Go to', label: n.href === '/chat' ? `Ask ${companion.name}` : n.label, sub: n.hint, icon: n.icon, run: () => go(n.href) })
       for (const t of TOOLS) out.push({ id: `tool:${t.href}`, group: 'Tools', label: t.label, sub: t.sub, icon: t.icon, run: () => go(t.href) })
     }
     return out
-  }, [q, notes, hits, go, openNote])
+  }, [q, notes, hits, go, openNote, companion.name])
 
   useEffect(() => { setSel(s => Math.min(s, Math.max(0, entries.length - 1))) }, [entries.length])
   useEffect(() => {
@@ -135,7 +138,7 @@ export function CommandPalette() {
             value={q}
             onChange={e => { setQ(e.target.value); setSel(0) }}
             onKeyDown={onKeyDown}
-            placeholder="Find a note, ask a question, or jot something down…"
+            placeholder={`Find a note, ask ${companion.name}, or jot something down…`}
             className="flex-1 h-14 bg-transparent outline-none text-[15px]"
             style={{ color: 'var(--text)' }}
           />

@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next'
 import './globals.css'
 import { ToastProvider } from '@/components/shared/Toast'
 import { AppShell } from '@/components/layout/AppShell'
+import { CompanionProvider } from '@/components/companion/CompanionContext'
 
 export const metadata: Metadata = {
   title: 'Vault',
@@ -41,7 +42,9 @@ export default function RootLayout({
       </head>
       <body className="font-sans min-h-screen">
         <ToastProvider>
-          <AppShell>{children}</AppShell>
+          <CompanionProvider>
+            <AppShell>{children}</AppShell>
+          </CompanionProvider>
         </ToastProvider>
       </body>
     </html>

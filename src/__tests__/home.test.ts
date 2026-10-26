@@ -169,3 +169,29 @@ describe('gatherWeek', () => {
     vi.doUnmock('@/lib/config'); vi.doUnmock('@/lib/opsLog')
   })
 })
+
+describe('homeLine (companion voice)', async () => {
+  const { homeLine } = await import('@/lib/voice')
+  const ready = { ready: true, busy: false, error: null }
+  it('summarises what is waiting in one sentence', () => {
+    expect(homeLine({ inboxNew: 3, suggestions: 1, needsAttention: 7, index: ready }))
+      .toBe('I’ve prepared 1 change that needs your OK, picked 3 new reads for you and found 7 notes with loose ends. Or just tell me what’s on your mind.')
+    expect(homeLine({ inboxNew: 0, suggestions: 2, needsAttention: 0, index: ready }))
+      .toBe('I’ve prepared 2 changes that need your OK. Or just tell me what’s on your mind.')
+  })
+  it('has calm, reading and broken states', () => {
+    expect(homeLine({ inboxNew: 0, suggestions: 0, needsAttention: 0, index: ready })).toMatch(/good order/)
+    expect(homeLine({ inboxNew: 5, suggestions: 0, needsAttention: 0, index: { ready: false, busy: true, error: null } })).toMatch(/still reading/)
+    expect(homeLine({ inboxNew: 0, suggestions: 0, needsAttention: 0, index: { ready: false, busy: false, error: 'x' } })).toMatch(/Ollama/)
+    expect(homeLine(null)).toMatch(/look/)
+  })
+})
+
+describe('splitAskBack', async () => {
+  const { splitAskBack } = await import('@/lib/companion')
+  it('peels trailing → questions off the answer', () => {
+    expect(splitAskBack('Answer.\n\n→ What would change your mind?\n')).toEqual({ body: 'Answer.', asks: ['What would change your mind?'] })
+    expect(splitAskBack('A → B in the middle stays.')).toEqual({ body: 'A → B in the middle stays.', asks: [] })
+    expect(splitAskBack('x\n-> one\n→ two')).toEqual({ body: 'x', asks: ['one', 'two'] })
+  })
+})

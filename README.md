@@ -100,6 +100,7 @@ See [SETUP.md](SETUP.md) for per-machine model recommendations.
 
 | Page | What it does |
 |------|--------------|
+| **Companion** | The notes have a keeper: **Inka** the octopus by default (or Fenn the fox, Pim the penguin — pick and rename in Settings). It greets you on Home with what's waiting, answers in the first person with a question back when there's something to think about, and in **Spar** mode argues with your idea from your own notes: what supports it, what cuts against it, the blind spot. Persona and modes: `src/lib/companion.ts` |
 | **⌘K** | One box from anywhere: find a note by name or content, ask a question, save a thought, jump to a page or tool |
 | **Home** | Greeting + one input: Enter asks your notes, ⌘Enter jots the text into today's daily note (append-only). "Waiting for you" tiles (new reads, overnight suggestions, notes to tidy), the briefing, recently edited notes, and what changed |
 | **Ask** | Ask the vault (hybrid retrieval, multi-turn, sessions). Answers render as formatted text and cite the notes they're based on; **Save as note** turns a conversation into a reviewed note |

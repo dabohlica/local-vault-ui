@@ -4,12 +4,14 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Plus } from 'lucide-react'
 import { NAV, isActive, useInboxBadge } from './nav'
+import { useCompanion } from '@/components/companion/CompanionContext'
 
 // Phone navigation: the four everyday places plus a central "add" button. Tools
 // and Settings stay in the ☰ drawer.
 export function MobileTabBar() {
   const pathname = usePathname()
   const badge = useInboxBadge()
+  const companion = useCompanion()
   const [home, ask, inbox, notes] = NAV
   const tabs = [home, ask, null, inbox, notes]
 
@@ -35,7 +37,7 @@ export function MobileTabBar() {
           <Link key={item.href} href={item.href} className="relative flex-1 flex flex-col items-center justify-center gap-0.5 h-14 text-[11px] font-medium"
             style={{ color: active ? 'var(--primary)' : 'var(--text-subtle)' }}>
             <Icon size={20} strokeWidth={active ? 2.25 : 1.75} />
-            {item.label}
+            {item.href === '/chat' ? companion.name : item.label}
             {count > 0 && (
               <span className="absolute top-1.5 left-1/2 ml-2 text-[10px] font-semibold px-1 rounded-full min-w-[16px] text-center" style={{ background: 'var(--primary)', color: 'white' }}>
                 {count > 99 ? '99+' : count}

@@ -5,6 +5,7 @@ import type { RetrievedChunk } from '@/lib/embeddings'
 import type { LocalCommand } from '@/lib/commands'
 import { CONTRACT_INSTRUCTIONS } from '@/lib/commands'
 import { STRUCTURED_OUTPUT_SPEC, STRUCTURED_OUTPUT_SPEC_SINGLE } from '@/lib/structuredOutput'
+import { personaPrompt, type ChatMode, type Companion } from '@/lib/companion'
 
 // _CLAUDE.md encodes the vault's "AI-first" conventions. Read fresh each call —
 // it's tiny, and this keeps the prompt correct when the user switches vaults.
@@ -28,14 +29,23 @@ function formatChunks(chunks: RetrievedChunk[]): string {
 
 export type PriorMessage = { role: 'user' | 'assistant'; content: string }
 
-export function buildRagPrompt(question: string, chunks: RetrievedChunk[], history: PriorMessage[] = []) {
-  const system = `You are a local assistant answering questions about Daniel's personal Obsidian vault.
+export function buildRagPrompt(
+  question: string,
+  chunks: RetrievedChunk[],
+  history: PriorMessage[] = [],
+  opts: { companion?: Companion; mode?: ChatMode } = {},
+) {
+  const persona = opts.companion
+    ? personaPrompt(opts.companion, opts.mode ?? 'ask')
+    : "You are a local assistant answering questions about Daniel's personal Obsidian vault."
+  const system = `${persona}
+
 This is a multi-turn conversation — use the earlier messages for context (e.g. resolve "he", "that
 project", "the one you mentioned" against what was already discussed).
 
-Answer using the information in the provided source excerpts below and the conversation so far. If the
-sources don't contain the answer, say so plainly — do not make things up. When you reference information
-from a source, cite it inline using its wikilink, e.g. [[Projects/Example Project]].
+Use the information in the provided source excerpts below and the conversation so far. If the sources
+don't contain the answer, say so plainly — do not make things up. When you reference information from a
+source, cite it inline using its wikilink, e.g. [[Projects/Example Project]].
 
 --- VAULT SOURCES ---
 

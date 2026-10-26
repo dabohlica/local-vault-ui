@@ -6,6 +6,7 @@ import { normalizeChanges } from '@/lib/healthFix'
 import { ollamaChatStream, ollamaChatStructured } from '@/lib/ollama'
 import { getConfig } from '@/lib/config'
 import { appendToSession, getSession } from '@/lib/chatHistory'
+import { resolveCompanion } from '@/lib/companion'
 
 // A cold model load can take minutes; don't let the platform abort the request.
 export const maxDuration = 300
@@ -49,7 +50,7 @@ function ndjsonStream(producer: (write: (obj: unknown) => void) => Promise<void>
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json() as { question: string; mode?: 'ask' | 'edit'; sessionId?: string }
+    const body = await req.json() as { question: string; mode?: 'ask' | 'spar' | 'edit'; sessionId?: string }
     if (!body.question?.trim()) {
       return NextResponse.json({ error: 'Missing question' }, { status: 400 })
     }
@@ -74,9 +75,9 @@ export async function POST(req: NextRequest) {
     if (!stats.modelMatches && !wasBusy) void syncIndex().catch(() => { /* surfaced via Diagnostics */ })
     if (!stats.modelMatches && (stats.model !== null || wasBusy)) {
       const msg =
-        `I'm re-indexing your notes for the embedding model \`${getConfig().embedModel}\`` +
-        (stats.model ? ` (the index was built with \`${stats.model}\`)` : '') +
-        `. This runs in the background and takes a few minutes for a large vault — ask again shortly.`
+        `I'm still reading your notes after the model change (now \`${getConfig().embedModel}\`` +
+        (stats.model ? `, before \`${stats.model}\`` : '') +
+        `). That takes a few minutes for a big vault. Ask me again shortly.`
       return ndjsonStream(async (write) => {
         write({ type: 'meta', citations: [], indexEmpty: true })
         write({ type: 'token', v: msg })
@@ -89,10 +90,10 @@ export async function POST(req: NextRequest) {
     // because the embedding model wasn't installed). Say so explicitly.
     if (stats.chunks === 0) {
       const msg =
-        `I don't have any of your notes indexed on this machine yet, so I can't search them.\n\n` +
+        `I haven't read any of your notes on this machine yet, so I can't look anything up.\n\n` +
         `**To fix it:** make sure the embedding model \`${getConfig().embedModel}\` is installed ` +
-        `(Settings → Embedding model → Pull), then click **Sync Index** in the top bar (or **Build index** ` +
-        `in Settings). Ask again once it finishes. The index is per-machine and isn't shared via git.`
+        `(Settings → Embedding model → Pull), then choose **Update** in the sync menu (cloud icon, top right) ` +
+        `or **Build index** in Settings. Ask me again once it's done.`
       // Streamed (not JSON) so the client has a single ask-mode code path.
       return ndjsonStream(async (write) => {
         write({ type: 'meta', citations: [], indexEmpty: true })
@@ -152,7 +153,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ mode: 'edit', changes: result.changes, log_entry: result.log_entry, summary: result.summary, citations: editCitations, sessionId: sid })
     }
 
-    // ASK MODE — grounded answer over hybrid + reranked retrieval, streamed token by
+    // ASK / SPAR MODE — grounded answer (spar: pushes back on the user's idea) over hybrid + reranked retrieval, streamed token by
     // token. Retrieval runs inside the stream so an embed-model failure surfaces as
     // an in-stream error event rather than a mismatched JSON response.
     return ndjsonStream(async (write) => {
@@ -172,7 +173,11 @@ export async function POST(req: NextRequest) {
       // render sources as soon as the answer starts.
       write({ type: 'meta', citations })
 
-      const messages = buildRagPrompt(body.question, chunks, history)
+      const cfg = getConfig()
+      const messages = buildRagPrompt(body.question, chunks, history, {
+        companion: resolveCompanion(cfg.companionKind, cfg.companionName),
+        mode: body.mode === 'spar' ? 'spar' : 'ask',
+      })
       // A grounded prose answer for the user to read — writer work.
       let answer = ''
       for await (const delta of ollamaChatStream({ messages, role: 'writer' })) {

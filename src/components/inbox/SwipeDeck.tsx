@@ -4,6 +4,8 @@ import Link from 'next/link'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Check, Clock, ExternalLink, Sparkles, Undo2, X, FileText } from 'lucide-react'
 import type { InboxItem } from '@/lib/inbox'
+import { CompanionAvatar } from '@/components/companion/Avatar'
+import { useCompanion } from '@/components/companion/CompanionContext'
 
 export type SwipeDecision = 'accepted' | 'rejected' | 'later'
 
@@ -33,6 +35,7 @@ export function SwipeDeck({
   canUndo: boolean
 }) {
   const top = items[0]
+  const companion = useCompanion()
   const [dx, setDx] = useState(0)
   const [leaving, setLeaving] = useState<SwipeDecision | null>(null)
   const [dragging, setDragging] = useState(false)
@@ -146,9 +149,9 @@ export function SwipeDeck({
               )}
 
               {top.why && (
-                <div className="rounded-xl p-3 text-sm flex gap-2" style={{ background: 'var(--primary-tint)', color: 'var(--text)' }}>
-                  <Sparkles size={15} className="flex-shrink-0 mt-0.5" style={{ color: 'var(--primary)' }} />
-                  <span>{top.why}</span>
+                <div className="rounded-xl p-3 text-sm flex gap-2.5" style={{ background: 'var(--primary-tint)', color: 'var(--text)' }}>
+                  <CompanionAvatar kind={companion.kind} size={28} className="mt-0.5" />
+                  <span><span className="block text-[11px] font-semibold uppercase tracking-wide" style={{ color: 'var(--primary)' }}>Why {companion.name} picked it</span>{top.why}</span>
                 </div>
               )}
 

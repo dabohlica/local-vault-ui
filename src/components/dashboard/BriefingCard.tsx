@@ -146,7 +146,7 @@ export function BriefingCard() {
         {!loading && !error && active === MORNING && !content && (
           <div className="flex flex-col items-center justify-center h-full gap-3 text-center">
             <p className="text-sm max-w-xs" style={{ color: 'var(--text-subtle)' }}>
-              Every morning this shows the best new papers and articles from your sources, and why they matter to you.
+              Every morning I’ll pick the best new papers and articles from your sources, and tell you why they matter to you.
             </p>
             <div className="flex gap-2">
               <button onClick={() => void buildMorning()} disabled={building} className="btn btn-primary text-xs">{building ? 'Building…' : 'Build one now'}</button>

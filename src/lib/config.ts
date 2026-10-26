@@ -59,6 +59,10 @@ export type AppConfig = {
   nightlySkipThreshold: number  // more changed notes than this = bulk import, skip the night
   nightlyMaxBatches: number     // hard stop on nightly LLM spend
   nightlyMaxMapPaths: number    // cap on the all-note-paths map given as link/move targets
+  // The character who keeps the notes (src/lib/companion.ts): which creature,
+  // and what it's called ('' = the creature's default name).
+  companionKind: string
+  companionName: string
 }
 
 function defaults(): AppConfig {
@@ -88,6 +92,8 @@ function defaults(): AppConfig {
     nightlySkipThreshold: 60,
     nightlyMaxBatches: 4,
     nightlyMaxMapPaths: 400,
+    companionKind: 'octopus',
+    companionName: '',
   }
 }
 

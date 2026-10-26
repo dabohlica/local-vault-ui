@@ -48,11 +48,14 @@ export async function POST() {
   // 0) Commit any local changes first so they're included in the push. Inline
   //    identity so it works even if git user.name/email aren't configured.
   try {
-    const { stdout } = await git(cwd, ['status', '--porcelain'])
+    // Edits inside a submodule (e.g. a cloned skill repo in the vault) can't be
+    // committed from here — ignore them, or "nothing to commit" fails the sync.
+    const { stdout } = await git(cwd, ['status', '--porcelain', '--ignore-submodules=dirty'])
     if (stdout.trim()) {
       const stamp = new Date().toISOString().slice(0, 16).replace('T', ' ')
       await git(cwd, ['add', '-A']) // stage tracked + untracked so nothing is left behind
-      await git(cwd, [
+      const staged = await git(cwd, ['diff', '--cached', '--quiet']).then(() => false, () => true)
+      if (staged) await git(cwd, [
         '-c', 'user.name=vault-ui', '-c', 'user.email=vault-ui@local',
         'commit', '--no-verify', '-m', `vault-ui: local vault changes (${stamp})`,
       ])

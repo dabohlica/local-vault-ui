@@ -2,8 +2,11 @@
 
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
-import { Inbox, Sparkles, HeartPulse, CheckCircle2, Loader2, AlertCircle, FileText, ChevronRight, type LucideIcon } from 'lucide-react'
+import { Inbox, Sparkles, HeartPulse, CheckCircle2, FileText, ChevronRight, type LucideIcon } from 'lucide-react'
 import { Composer } from '@/components/home/Composer'
+import { CompanionAvatar } from '@/components/companion/Avatar'
+import { useCompanion } from '@/components/companion/CompanionContext'
+import { homeLine } from '@/lib/voice'
 import { BriefingCard } from '@/components/dashboard/BriefingCard'
 import { RecapCard } from '@/components/home/RecapCard'
 import { ActivityTimelineCard } from '@/components/dashboard/ActivityTimelineCard'
@@ -32,6 +35,7 @@ function ago(iso: string): string {
 
 export default function HomePage() {
   const [home, setHome] = useState<Home | null>(null)
+  const companion = useCompanion()
   const [today, setToday] = useState('')
 
   useEffect(() => {
@@ -58,36 +62,26 @@ export default function HomePage() {
   }, [idx])
 
   const tiles: Array<{ n: number; icon: LucideIcon; title: string; sub: string; href: string }> = home ? [
-    { n: home.inboxNew, icon: Inbox, title: `${home.inboxNew} new to read`, sub: 'Papers & articles picked for you', href: '/inbox' },
-    { n: home.suggestions, icon: Sparkles, title: `${home.suggestions} suggestion${home.suggestions === 1 ? '' : 's'}`, sub: 'Changes waiting for your OK', href: '/inbox?tab=suggestions' },
-    { n: home.needsAttention, icon: HeartPulse, title: `${home.needsAttention} note${home.needsAttention === 1 ? '' : 's'} to tidy`, sub: 'Broken links, missing details', href: '/commands?tool=health' },
+    { n: home.inboxNew, icon: Inbox, title: `${home.inboxNew} new to read`, sub: 'Papers and articles I picked for you', href: '/inbox' },
+    { n: home.suggestions, icon: Sparkles, title: `${home.suggestions} suggestion${home.suggestions === 1 ? '' : 's'}`, sub: 'Changes I’d like your OK on', href: '/inbox?tab=suggestions' },
+    { n: home.needsAttention, icon: HeartPulse, title: `${home.needsAttention} loose end${home.needsAttention === 1 ? '' : 's'}`, sub: 'Broken links and missing details I found', href: '/commands?tool=health' },
   ].filter(t => t.n > 0) : []
 
   return (
     <div className="max-w-5xl mx-auto flex flex-col gap-8">
       <section className="flex flex-col gap-4 pt-2 md:pt-4">
-        <div>
-          <p className="text-sm" style={{ color: 'var(--text-subtle)' }}>{today}</p>
-          <h1 className="text-2xl md:text-3xl font-semibold tracking-tight mt-0.5" style={{ color: 'var(--text)' }}>{greeting()}</h1>
+        <div className="flex items-start gap-3 md:gap-4">
+          <CompanionAvatar kind={companion.kind} size={64} thinking={!!idx && !idx.ready && !idx.error} title={companion.name} className="mt-1" />
+          <div className="min-w-0 flex-1">
+            <p className="text-sm" style={{ color: 'var(--text-subtle)' }}>{today}</p>
+            <h1 className="text-2xl md:text-3xl font-semibold tracking-tight mt-0.5" style={{ color: 'var(--text)' }}>{greeting()}</h1>
+            <p className="speech inline-block mt-3 px-4 py-2.5 text-[15px] leading-relaxed" style={{ color: 'var(--text)' }}>
+              {homeLine(home && { ...home, index: home.index && { ready: home.index.ready, busy: home.index.busy, error: home.index.error } })}
+            </p>
+          </div>
         </div>
         <Composer />
       </section>
-
-      {idx && !idx.ready && (
-        <div className="flex items-center gap-3 rounded-xl px-4 py-3 text-sm" style={{ background: 'var(--primary-tint)', color: 'var(--text)' }}>
-          {idx.error ? (
-            <>
-              <AlertCircle size={16} className="flex-shrink-0" style={{ color: 'var(--warning)' }} />
-              <span>Your notes can’t be prepared for questions yet: {idx.error}. Is Ollama running? It retries every 10 minutes; name search works meanwhile.</span>
-            </>
-          ) : (
-            <>
-              <Loader2 size={16} className="animate-spin flex-shrink-0" style={{ color: 'var(--primary)' }} />
-              <span>Getting your notes ready for questions — this runs once after a model change and takes a few minutes. Name search works meanwhile.</span>
-            </>
-          )}
-        </div>
-      )}
 
       <section className="flex flex-col gap-3">
         <h2 className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-subtle)' }}>Waiting for you</h2>
@@ -95,7 +89,7 @@ export default function HomePage() {
           <div className="h-[72px] rounded-2xl" style={{ background: 'var(--bg-elevated)' }} />
         ) : tiles.length === 0 ? (
           <div className="card p-4 flex items-center gap-3 text-sm" style={{ color: 'var(--text-muted)' }}>
-            <CheckCircle2 size={18} style={{ color: 'var(--success)' }} /> You’re all caught up.
+            <CheckCircle2 size={18} style={{ color: 'var(--success)' }} /> Nothing waiting. You’re all caught up.
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
