@@ -203,6 +203,9 @@ function ChatView() {
   useEffect(() => {
     if (!handoff) { handled.current = null }
     else if (handoff !== handled.current) {
+      // An answer is still streaming: wait for it (this effect re-runs when
+      // `loading` drops) rather than clearing the view under it.
+      if (loading) return
       handled.current = handoff
       booted.current = true
       router.replace('/chat')
@@ -218,7 +221,7 @@ function ChatView() {
       if (list.length) await openSession(list[0].id)
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [handoff])
+  }, [handoff, loading])
 
   // Route the whole conversation through the normal ingest pipeline → review.
   async function includeInVault() {

@@ -43,16 +43,16 @@ export default function HomePage() {
 
   // While the index is being (re)built, check its status until it's ready:
   // often while it's running, rarely while it waits for the next scheduler
-  // tick, and not at all after it failed (the banner then says why).
+  // tick, and on the server's 10-minute retry rhythm after a failure.
   const idx = home?.index
   useEffect(() => {
-    if (!idx || idx.ready || idx.error) return
+    if (!idx || idx.ready) return
     const t = setTimeout(() => {
       fetch('/api/home?part=index', { cache: 'no-store' })
         .then(r => r.json())
         .then((d: { index: Home['index'] }) => setHome(h => h && { ...h, index: d.index }))
         .catch(() => {})
-    }, idx.busy ? 8000 : 60000)
+    }, idx.busy ? 8000 : idx.error ? 10 * 60_000 : 60_000)
     return () => clearTimeout(t)
   }, [idx])
 

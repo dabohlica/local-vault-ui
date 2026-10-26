@@ -127,8 +127,11 @@ async function tick(): Promise<void> {
   try {
     // Independent: a model/embedder failure in one must not skip the other.
     // Each is retried on its next due tick.
+    // Not awaited: a full re-embed after a model change can take a long time,
+    // and must not hold up the briefing, feeds or caretaker. syncIndex holds
+    // the index lock, so runs never stack.
     const { healIndex } = await import('@/lib/indexHeal')
-    await healIndex().catch(() => {})
+    void healIndex().catch(() => {})
     await runCaretakeJobs(new Date(), cfg).catch(() => {})
     await runFeedJobs(new Date(), cfg).catch(() => {})
   } finally {

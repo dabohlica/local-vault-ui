@@ -1,4 +1,5 @@
 import fs from 'fs'
+import path from 'path'
 import { listAllNotes, resolveVaultPath, isMetaNote } from '@/lib/vault'
 import { brokenLinkTargets, buildKnownSet } from '@/lib/interlink'
 import { graphOverview } from '@/lib/graph'
@@ -83,14 +84,20 @@ export function scanVaultHealth(): HealthReport {
 }
 
 // Home asks on every visit; a vault-wide scan reads every note, so reuse a
-// recent result. At most a minute stale.
+// recent result — but rescan as soon as the app writes anything (every write is
+// appended to data/operations.jsonl), so a Health check fix shows at once.
+// Edits made outside the app (Obsidian) show within a minute.
 const HEALTH_TTL_MS = 60_000
-const HC = ((globalThis as unknown as { __vaultHealthCache?: { at: number; report: HealthReport | null } }).__vaultHealthCache ??= { at: 0, report: null })
+const OPS_LOG = path.join(process.cwd(), 'data', 'operations.jsonl')
+const HC = ((globalThis as unknown as { __vaultHealthCache?: { at: number; opsMtime: number; report: HealthReport | null } }).__vaultHealthCache ??= { at: 0, opsMtime: 0, report: null })
 
 export function cachedHealthScan(now = Date.now()): HealthReport {
-  if (!HC.report || now - HC.at > HEALTH_TTL_MS) {
+  let opsMtime = 0
+  try { opsMtime = fs.statSync(OPS_LOG).mtimeMs } catch { /* no writes yet */ }
+  if (!HC.report || now - HC.at > HEALTH_TTL_MS || opsMtime !== HC.opsMtime) {
     HC.report = scanVaultHealth()
     HC.at = now
+    HC.opsMtime = opsMtime
   }
   return HC.report
 }
