@@ -14,6 +14,7 @@ const DIR = path.join(process.cwd(), 'data', 'recaps')
 const RECAP_DAY = 0  // Sunday
 const RECAP_HOUR = 17
 const DAILY_BUDGET = 14_000 // chars of daily-note text sent to the model
+const BULK_TOUCH_RATIO = 0.5
 
 export type Recap = {
   week: string      // key of the week it covers, "YYYY-MM-DD" of its last day (the Sunday)
@@ -72,8 +73,11 @@ export function gatherWeek(start: Date, end: Date): { daily: string; edited: str
     if (body) daily.push(`### ${date}\n${body}`)
   }
 
-  const edited = notes
-    .filter(n => n.mtime >= start && n.mtime <= end && !/(^|\/)daily\//i.test(n.path))
+  // A restore, git checkout or iCloud re-download touches every file at once —
+  // that's not "work this week", so ignore the edit list when most notes moved.
+  const touched = notes.filter(n => n.mtime >= start && n.mtime <= end && !/(^|\/)daily\//i.test(n.path))
+  const bulk = notes.length >= 20 && touched.length > notes.length * BULK_TOUCH_RATIO
+  const edited = (bulk ? [] : touched)
     .sort((a, b) => b.mtime.getTime() - a.mtime.getTime())
     .slice(0, 40)
     .map(n => n.path.replace(/\.md$/, ''))
@@ -105,7 +109,8 @@ export function generateRecap(now = new Date()): Promise<Recap | null> {
   G.running = (async () => {
     const { week, start, end } = recapWindow(now)
     const w = gatherWeek(start, end)
-    if (!w.daily && !w.edited.length && !w.changes.length && !w.reading.length) return null
+    // Edited file names alone are too thin to recap from.
+    if (!w.daily && !w.changes.length && !w.reading.length) return null
     const list = (xs: string[]) => xs.length ? xs.map(x => `- ${x}`).join('\n') : '(none)'
     const text = await ollamaChat({
       role: 'writer',

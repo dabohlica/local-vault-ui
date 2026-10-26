@@ -142,3 +142,30 @@ describe('dropSection', async () => {
     expect(dropSection(md, 'Missing')).toBe(md)
   })
 })
+
+describe('gatherWeek', () => {
+  it('ignores a bulk touch (restore / re-download) but keeps real edits', async () => {
+    const fs = await import('fs')
+    const os = await import('os')
+    const path = await import('path')
+    const { vi } = await import('vitest')
+    const vault = fs.mkdtempSync(path.join(os.tmpdir(), 'recap-'))
+    const inWeek = new Date(2026, 9, 22, 12)
+    const old = new Date(2026, 5, 1, 12)
+    for (let i = 0; i < 30; i++) {
+      const p = path.join(vault, 'Knowledge', `N${i}.md`)
+      fs.mkdirSync(path.dirname(p), { recursive: true })
+      fs.writeFileSync(p, `# N${i}\n`)
+      fs.utimesSync(p, old, i < 3 ? inWeek : old)
+    }
+    vi.resetModules()
+    vi.doMock('@/lib/config', () => ({ getConfig: () => ({ vaultPath: vault }) }))
+    vi.doMock('@/lib/opsLog', () => ({ readOperations: () => [], recordOperation: () => {} }))
+    const { gatherWeek } = await import('@/lib/recap')
+    const start = new Date(2026, 9, 19), end = new Date(2026, 9, 25, 17)
+    expect(gatherWeek(start, end).edited.sort()).toEqual(['Knowledge/N0', 'Knowledge/N1', 'Knowledge/N2'])
+    for (let i = 0; i < 30; i++) fs.utimesSync(path.join(vault, 'Knowledge', `N${i}.md`), inWeek, inWeek)
+    expect(gatherWeek(start, end).edited).toEqual([])
+    vi.doUnmock('@/lib/config'); vi.doUnmock('@/lib/opsLog')
+  })
+})
