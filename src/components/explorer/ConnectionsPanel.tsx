@@ -58,7 +58,7 @@ export function ConnectionsPanel({ notePath }: { notePath: string }) {
   if (!data.outgoing.length && !data.backlinks.length) {
     return (
       <div className="max-w-3xl mt-8 pt-4 border-t text-xs" style={{ borderColor: 'var(--border-subtle)', color: 'var(--text-subtle)' }}>
-        Not connected to any other note yet. The Interlink command can suggest links.
+        Not connected to any other note yet. Tools → Connect notes can suggest links.
       </div>
     )
   }

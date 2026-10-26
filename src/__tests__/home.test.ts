@@ -54,3 +54,60 @@ describe('readable (search snippets)', async () => {
     expect(readable(chunk)).toBe('Prompt engineering links Jane and Foo — see docs. a b')
   })
 })
+
+describe('linkWikilinks (chat answers)', async () => {
+  const { linkWikilinks } = await import('@/lib/wikilinks')
+  const notes = ['People/Jane Smith.md', 'Clients/VD Energieeffizienz.md']
+  it('keeps the alias and links by path or by name', () => {
+    expect(linkWikilinks('[[People/Jane Smith|Jane]]', [], notes)).toBe('[Jane](/explorer?file=People%2FJane%20Smith.md)')
+    expect(linkWikilinks('[[Jane Smith#Role|the CTO]]', [], notes)).toBe('[the CTO](/explorer?file=People%2FJane%20Smith.md)')
+    expect(linkWikilinks('at [[Clients/VD Energieeffizienz]].', [], notes)).toBe('at [VD Energieeffizienz](/explorer?file=Clients%2FVD%20Energieeffizienz.md).')
+  })
+  it('bolds links to notes that do not exist', () => {
+    expect(linkWikilinks('[[Nowhere|here]] and [[Nope]]', [], notes)).toBe('**here** and **Nope**')
+  })
+})
+
+describe('jotDown races', () => {
+  it('appends when the daily note appears between the read and the create', async () => {
+    const fs = await import('fs')
+    const os = await import('os')
+    const path = await import('path')
+    const { vi } = await import('vitest')
+    const vault = fs.mkdtempSync(path.join(os.tmpdir(), 'jot-'))
+    const rel = 'Daily/2026-10-26.md'
+    // Simulate the race: the first read finds no note, then Obsidian creates it.
+    let first = true
+    const readFileSync = ((p: string, o?: unknown) => {
+      if (first && String(p).endsWith(rel)) {
+        first = false
+        fs.mkdirSync(path.join(vault, 'Daily'), { recursive: true })
+        fs.writeFileSync(path.join(vault, rel), '# from obsidian\n')
+        throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
+      }
+      return fs.readFileSync(p, o as BufferEncoding)
+    }) as typeof fs.readFileSync
+    vi.resetModules()
+    vi.doMock('fs', () => ({ ...fs, default: { ...fs, readFileSync }, readFileSync }))
+    vi.doMock('@/lib/config', () => ({ getConfig: () => ({ vaultPath: vault }) }))
+    vi.doMock('@/lib/opsLog', () => ({ recordOperation: () => {} }))
+    const { jotDown } = await import('@/lib/capture')
+    expect(jotDown('keep me', new Date(2026, 9, 26, 9, 15))).toBe(rel)
+    const out = fs.readFileSync(path.join(vault, rel), 'utf-8')
+    expect(out.startsWith('# from obsidian\n')).toBe(true)
+    expect(out).toContain('## 09:15 — Jotted down\n\nkeep me')
+    vi.doUnmock('fs'); vi.doUnmock('@/lib/config'); vi.doUnmock('@/lib/opsLog')
+  })
+})
+
+describe('shouldHeal (index self-heal backoff)', async () => {
+  const { shouldHeal } = await import('@/lib/indexHeal')
+  it('syncs only when not ready, not already running, and not within 10 min of a failure', () => {
+    const now = 1_000_000_000
+    expect(shouldHeal(false, false, 0, now)).toBe(true)
+    expect(shouldHeal(true, false, 0, now)).toBe(false)
+    expect(shouldHeal(false, true, 0, now)).toBe(false)
+    expect(shouldHeal(false, false, now - 5 * 60_000, now)).toBe(false)
+    expect(shouldHeal(false, false, now - 11 * 60_000, now)).toBe(true)
+  })
+})

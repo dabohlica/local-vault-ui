@@ -22,7 +22,7 @@ function ago(ts: number | null): string {
 // load it pulls, then pushes local edits (only after a clean pull, so we never
 // push on top of an unreconciled remote). A vault without a git remote is fine:
 // it shows as "On this Mac" rather than an error.
-export function SyncStatus() {
+export function SyncStatus({ enabled = true }: { enabled?: boolean }) {
   const { showToast } = useToast()
   const [state, setState] = useState<State>('idle')
   const [detail, setDetail] = useState('')
@@ -39,7 +39,9 @@ export function SyncStatus() {
       const pd = await pull.json() as { stdout?: string; error?: string }
       if (!pull.ok) {
         const msg = pd.error ?? 'Sync failed'
-        const localOnly = /not a git repository|no upstream|remote/i.test(msg)
+        // Only the two "there is nothing to sync with" answers count as local-only;
+        // a conflict or an unreachable remote is a real failure and must show.
+        const localOnly = /not a git repository|no upstream\/remote configured/i.test(msg)
         setState(localOnly ? 'local' : 'error')
         setDetail(localOnly ? 'This vault isn’t connected to a git remote, so it lives only on this Mac.' : msg)
         if (!quiet && !localOnly) showToast(msg, 'error')
@@ -64,10 +66,12 @@ export function SyncStatus() {
   }, [showToast])
 
   useEffect(() => {
-    if (didAutoSync) return
+    // Wait until a vault is configured (fresh install): syncing before that
+    // would fail and use up the once-per-load auto sync.
+    if (!enabled || didAutoSync) return
     didAutoSync = true
     void sync(true)
-  }, [sync])
+  }, [sync, enabled])
 
   // Close the popover on outside click / Escape.
   useEffect(() => {
@@ -76,7 +80,7 @@ export function SyncStatus() {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
     document.addEventListener('mousedown', onDown)
     document.addEventListener('keydown', onKey)
-    fetch('/api/home').then(r => r.json()).then(d => setIndex(d.index)).catch(() => {})
+    fetch('/api/home?part=index').then(r => r.json()).then(d => setIndex(d.index)).catch(() => {})
     return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey) }
   }, [open])
 
@@ -87,7 +91,7 @@ export function SyncStatus() {
       const d = await res.json() as { notes?: number; error?: string }
       if (!res.ok) throw new Error(d.error ?? 'Update failed')
       showToast(d.notes ? `Updated search for ${d.notes} changed note(s)` : 'Search is up to date', 'success')
-      const h = await fetch('/api/home').then(r => r.json()).catch(() => null)
+      const h = await fetch('/api/home?part=index').then(r => r.json()).catch(() => null)
       if (h) setIndex(h.index)
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Update failed', 'error')

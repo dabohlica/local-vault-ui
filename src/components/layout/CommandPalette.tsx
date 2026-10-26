@@ -51,11 +51,15 @@ export function CommandPalette() {
   // Full-text hits, debounced; note names are filtered instantly below.
   useEffect(() => {
     if (!open || q.trim().length < 2) { setHits([]); return }
+    // Abort on the next keystroke so a slow answer for "ja" can't land after
+    // (and overwrite) the one for "jane".
+    const ctrl = new AbortController()
+    setHits([])
     const t = setTimeout(() => {
-      fetch(`/api/vault/search?q=${encodeURIComponent(q)}&limit=8`)
-        .then(r => r.json()).then(d => setHits(d.results ?? [])).catch(() => {})
+      fetch(`/api/vault/search?q=${encodeURIComponent(q)}&limit=8`, { signal: ctrl.signal })
+        .then(r => r.json()).then(d => { if (!ctrl.signal.aborted) setHits(d.results ?? []) }).catch(() => {})
     }, 180)
-    return () => clearTimeout(t)
+    return () => { clearTimeout(t); ctrl.abort() }
   }, [q, open])
 
   const go = useCallback((href: string) => { setOpen(false); router.push(href) }, [router])

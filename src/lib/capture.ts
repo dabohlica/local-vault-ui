@@ -14,7 +14,7 @@ export function dailyNotePath(date: string): string {
 // The text to append (or the whole new note when there is none). Pure, for testing.
 export function captureBlock(existing: string | null, text: string, date: string, time: string): string {
   const entry = `## ${time} — Jotted down\n\n${text.trim()}\n`
-  if (existing === null) return `---\ndate: ${date}\ntype: daily\ntags: []\n---\n\n# ${date}\n\n${entry}`
+  if (existing === null) return `---\ndate: ${date}\ntype: daily\ntags: []\n---\n\n# ${date}\n\n## For future Claude\nDaily note for ${date}: thoughts jotted down during the day, newest last.\n\n${entry}`
   const sep = existing.endsWith('\n\n') ? '' : existing.endsWith('\n') ? '\n' : '\n\n'
   return `${sep}${entry}`
 }
@@ -27,8 +27,19 @@ export function jotDown(text: string, now = new Date()): string {
   fs.mkdirSync(path.dirname(abs), { recursive: true })
   let existing: string | null = null
   try { existing = fs.readFileSync(abs, 'utf-8') } catch { /* new daily note */ }
-  if (existing === null) fs.writeFileSync(abs, captureBlock(null, text, date, time), { encoding: 'utf-8', flag: 'wx' })
-  else fs.appendFileSync(abs, captureBlock(existing, text, date, time), 'utf-8')
+  if (existing === null) {
+    try {
+      fs.writeFileSync(abs, captureBlock(null, text, date, time), { encoding: 'utf-8', flag: 'wx' })
+    } catch (err) {
+      // Created in the meantime (Obsidian's daily-notes plugin, a git pull):
+      // append to that note instead of losing the jot.
+      if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw err
+      existing = fs.readFileSync(abs, 'utf-8')
+      fs.appendFileSync(abs, captureBlock(existing, text, date, time), 'utf-8')
+    }
+  } else {
+    fs.appendFileSync(abs, captureBlock(existing, text, date, time), 'utf-8')
+  }
   recordOperation({
     origin: 'capture',
     summary: `Jotted down: ${text.trim().split('\n')[0].slice(0, 80)}`,

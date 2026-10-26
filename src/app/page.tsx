@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
-import { Inbox, Sparkles, HeartPulse, CheckCircle2, Loader2, FileText, ChevronRight, type LucideIcon } from 'lucide-react'
+import { Inbox, Sparkles, HeartPulse, CheckCircle2, Loader2, AlertCircle, FileText, ChevronRight, type LucideIcon } from 'lucide-react'
 import { Composer } from '@/components/home/Composer'
 import { BriefingCard } from '@/components/dashboard/BriefingCard'
 import { ActivityTimelineCard } from '@/components/dashboard/ActivityTimelineCard'
@@ -13,7 +13,7 @@ type Home = {
   suggestions: number
   needsAttention: number
   notes: number
-  index: { ready: boolean; busy: boolean; notes: number } | null
+  index: { ready: boolean; busy: boolean; notes: number; error: string | null } | null
 }
 
 function greeting(d = new Date()): string {
@@ -41,14 +41,20 @@ export default function HomePage() {
     return () => window.removeEventListener('vault:updated', load)
   }, [])
 
-  // While the index is being (re)built, check back until it's ready.
+  // While the index is being (re)built, check its status until it's ready:
+  // often while it's running, rarely while it waits for the next scheduler
+  // tick, and not at all after it failed (the banner then says why).
+  const idx = home?.index
   useEffect(() => {
-    if (!home?.index || home.index.ready) return
+    if (!idx || idx.ready || idx.error) return
     const t = setTimeout(() => {
-      fetch('/api/home', { cache: 'no-store' }).then(r => r.json()).then(setHome).catch(() => {})
-    }, 8000)
+      fetch('/api/home?part=index', { cache: 'no-store' })
+        .then(r => r.json())
+        .then((d: { index: Home['index'] }) => setHome(h => h && { ...h, index: d.index }))
+        .catch(() => {})
+    }, idx.busy ? 8000 : 60000)
     return () => clearTimeout(t)
-  }, [home])
+  }, [idx])
 
   const tiles: Array<{ n: number; icon: LucideIcon; title: string; sub: string; href: string }> = home ? [
     { n: home.inboxNew, icon: Inbox, title: `${home.inboxNew} new to read`, sub: 'Papers & articles picked for you', href: '/inbox' },
@@ -66,10 +72,19 @@ export default function HomePage() {
         <Composer />
       </section>
 
-      {home?.index && !home.index.ready && (
+      {idx && !idx.ready && (
         <div className="flex items-center gap-3 rounded-xl px-4 py-3 text-sm" style={{ background: 'var(--primary-tint)', color: 'var(--text)' }}>
-          <Loader2 size={16} className="animate-spin flex-shrink-0" style={{ color: 'var(--primary)' }} />
-          Getting your notes ready for questions — this runs once after a model change and takes a few minutes. Name search works meanwhile.
+          {idx.error ? (
+            <>
+              <AlertCircle size={16} className="flex-shrink-0" style={{ color: 'var(--warning)' }} />
+              <span>Your notes can’t be prepared for questions yet: {idx.error}. Is Ollama running? It retries every 10 minutes; name search works meanwhile.</span>
+            </>
+          ) : (
+            <>
+              <Loader2 size={16} className="animate-spin flex-shrink-0" style={{ color: 'var(--primary)' }} />
+              <span>Getting your notes ready for questions — this runs once after a model change and takes a few minutes. Name search works meanwhile.</span>
+            </>
+          )}
         </div>
       )}
 

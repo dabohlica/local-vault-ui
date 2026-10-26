@@ -6,7 +6,7 @@ import { ThemeToggle } from './ThemeToggle'
 import { SyncStatus } from './SyncStatus'
 import { NAV, SETTINGS_ITEM, isActive, openPalette } from './nav'
 
-export function TopBar({ onMenuClick }: { onMenuClick?: () => void }) {
+export function TopBar({ onMenuClick, configured = true }: { onMenuClick?: () => void; configured?: boolean }) {
   const pathname = usePathname()
   const current = [...NAV, SETTINGS_ITEM].find(i => isActive(pathname, i.href))
   const title = pathname.startsWith('/add') ? 'Add note' : current?.label ?? ''
@@ -36,7 +36,7 @@ export function TopBar({ onMenuClick }: { onMenuClick?: () => void }) {
         <button onClick={() => openPalette()} className="md:hidden flex items-center justify-center w-9 h-9 rounded-lg" style={{ color: 'var(--text-muted)' }} aria-label="Search">
           <Search size={18} />
         </button>
-        <SyncStatus />
+        <SyncStatus enabled={configured} />
         <ThemeToggle />
       </div>
     </header>

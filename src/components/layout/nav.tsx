@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useState } from 'react'
 import { usePathname } from 'next/navigation'
 import { House, MessageCircle, Inbox, Library, Wand2, Settings, type LucideIcon } from 'lucide-react'
 
@@ -25,7 +25,10 @@ export function isActive(pathname: string, href: string): boolean {
 }
 
 // "Waiting for you" count for the Inbox badge: new reads + caretaker suggestions.
-export function useInboxBadge(): number {
+// Fetched once in AppShell's provider and shared by the sidebar and tab bar.
+const BadgeContext = createContext(0)
+
+export function InboxBadgeProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const [n, setN] = useState(0)
   useEffect(() => {
@@ -38,7 +41,11 @@ export function useInboxBadge(): number {
     window.addEventListener('vault:updated', load)
     return () => { active = false; window.removeEventListener('vault:updated', load) }
   }, [pathname])
-  return n
+  return <BadgeContext.Provider value={n}>{children}</BadgeContext.Provider>
+}
+
+export function useInboxBadge(): number {
+  return useContext(BadgeContext)
 }
 
 export function openPalette(query = '') {

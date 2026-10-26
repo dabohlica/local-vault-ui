@@ -126,7 +126,9 @@ async function tick(): Promise<void> {
   G.running = true
   try {
     // Independent: a model/embedder failure in one must not skip the other.
-    // Both are retried on their next due tick.
+    // Each is retried on its next due tick.
+    const { healIndex } = await import('@/lib/indexHeal')
+    await healIndex().catch(() => {})
     await runCaretakeJobs(new Date(), cfg).catch(() => {})
     await runFeedJobs(new Date(), cfg).catch(() => {})
   } finally {

@@ -1,7 +1,7 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -9,6 +9,7 @@ import { ArrowUp, Loader2, MessageCircle, FileText, Trash2, BookmarkPlus, Plus, 
 import { ProposalReview, type ProposalResponse } from '@/components/shared/ProposalReview'
 import { TagPicker } from '@/components/shared/TagPicker'
 import { fetchWithRetry } from '@/lib/fetchRetry'
+import { linkWikilinks, noteHref, titleOf } from '@/lib/wikilinks'
 
 type Citation = { path: string; heading: string; images?: string[] }
 type Message = { role: 'user' | 'assistant'; content: string; citations?: Citation[] }
@@ -32,25 +33,17 @@ function buildTranscript(messages: Message[]): string {
   return lines.join('\n')
 }
 
-const titleOf = (p: string) => (p.split('/').pop() ?? p).replace(/\.md$/, '')
-const noteHref = (p: string) => `/explorer?file=${encodeURIComponent(p)}`
-
-// [[Note]] in an answer → a link to that note (cited notes first, then any note
-// with that path or name), else just bold.
-function linkWikilinks(text: string, citations: Citation[] = [], notes: string[] = []): string {
-  return text.replace(/\[\[([^\]|#]+)(?:[#|][^\]]*)?(?:\|([^\]]*))?\]\]/g, (_, target: string, alias?: string) => {
-    const t = target.trim()
-    const label = alias?.trim() || titleOf(t)
-    const want = t.toLowerCase().replace(/\.md$/, '')
-    const pool = [...citations.map(c => c.path), ...notes]
-    const hit = pool.find(p => p.toLowerCase().replace(/\.md$/, '') === want)
-      ?? pool.find(p => titleOf(p).toLowerCase() === titleOf(want))
-    return hit ? `[${label}](${noteHref(hit)})` : `**${label}**`
-  })
+export default function ChatPage() {
+  return (
+    <Suspense fallback={null}>
+      <ChatView />
+    </Suspense>
+  )
 }
 
-export default function ChatPage() {
+function ChatView() {
   const router = useRouter()
+  const handoff = useSearchParams().get('q')
   const [sessions, setSessions] = useState<SessionItem[]>([])
   const [sessionId, setSessionId] = useState<string | undefined>(undefined)
   const [messages, setMessages] = useState<Message[]>([])
@@ -114,7 +107,9 @@ export default function ChatPage() {
     el.style.height = `${Math.min(el.scrollHeight, 200)}px`
   }, [input])
 
-  async function send(text?: string) {
+  // `sid` defaults to the open conversation; a hand-off from Home / ⌘K passes
+  // undefined to start a new one.
+  async function send(text?: string, sid: string | undefined = sessionId) {
     const question = (text ?? input).trim()
     if (!question || loading) return
 
@@ -134,7 +129,7 @@ export default function ChatPage() {
       const res = await fetchWithRetry('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question, mode: 'ask', sessionId }),
+        body: JSON.stringify({ question, mode: 'ask', sessionId: sid }),
       })
       // A failure before streaming begins comes back as JSON, not NDJSON.
       if (!res.ok || !res.body) {
@@ -193,31 +188,37 @@ export default function ChatPage() {
       // Self-heal: if nothing streamed in but the server already finished and
       // persisted the answer, pull it from the session so it shows without a manual
       // reload. Only when we have a session and rendered no partial answer.
-      if (!started && sessionId) void openSession(sessionId)
+      if (!started && sid) void openSession(sid)
     } finally {
       setLoading(false)
       setStreaming(false)
     }
   }
 
-  // On load: a question handed over from Home / ⌘K starts a fresh chat;
-  // otherwise reopen the most recent conversation.
+  // A question handed over from Home / ⌘K (?q=) starts a fresh chat — on first
+  // load and also when /chat is already open (the page stays mounted). Without
+  // one, the first load reopens the most recent conversation.
   const booted = useRef(false)
+  const handled = useRef<string | null>(null)
   useEffect(() => {
+    if (!handoff) { handled.current = null }
+    else if (handoff !== handled.current) {
+      handled.current = handoff
+      booted.current = true
+      router.replace('/chat')
+      setSessionId(undefined); setMessages([]); setProposal(null); setError(null); setHistoryOpen(false); setSaveOpen(false)
+      void loadSessions()
+      void send(handoff, undefined)
+      return
+    }
     if (booted.current) return
     booted.current = true
-    const q = new URLSearchParams(window.location.search).get('q')
     void (async () => {
       const list = await loadSessions()
-      if (q) {
-        router.replace('/chat')
-        void send(q)
-      } else if (list.length) {
-        await openSession(list[0].id)
-      }
+      if (list.length) await openSession(list[0].id)
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [handoff])
 
   // Route the whole conversation through the normal ingest pipeline → review.
   async function includeInVault() {

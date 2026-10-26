@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { X } from 'lucide-react'
 import { CommandCard } from './CommandCard'
 import { LOCAL_COMMANDS, type LocalCommand } from '@/lib/commands'
@@ -11,12 +12,13 @@ import { ProposalRunner } from './ProposalRunner'
 export function CommandGrid() {
   const [active, setActive] = useState<LocalCommand | null>(null)
 
-  // Deep link from Home / ⌘K: /commands?tool=health
+  // Deep link from Home / ⌘K: /commands?tool=health — also while this page is
+  // already open (the component stays mounted across the push).
+  const tool = useSearchParams().get('tool')
   useEffect(() => {
-    const id = new URLSearchParams(window.location.search).get('tool')
-    const cmd = LOCAL_COMMANDS.find(c => c.id === id)
+    const cmd = LOCAL_COMMANDS.find(c => c.id === tool)
     if (cmd) setActive(cmd)
-  }, [])
+  }, [tool])
 
   function close() {
     setActive(null)

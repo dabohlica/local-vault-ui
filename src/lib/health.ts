@@ -66,7 +66,7 @@ export function scanVaultHealth(): HealthReport {
   const graph = graphOverview()
   issues.push(...graph.issues)
   for (const p of graph.orphans) {
-    issues.push({ path: p, kind: 'orphan', detail: 'No links to or from this note — Interlink can suggest some' })
+    issues.push({ path: p, kind: 'orphan', detail: 'No links to or from this note — Tools → Connect notes can suggest some' })
   }
 
   const counts: HealthReport['counts'] = {
@@ -80,4 +80,17 @@ export function scanVaultHealth(): HealthReport {
   for (const i of issues) counts[i.kind]++
 
   return { scanned: notes.length, issues, counts }
+}
+
+// Home asks on every visit; a vault-wide scan reads every note, so reuse a
+// recent result. At most a minute stale.
+const HEALTH_TTL_MS = 60_000
+const HC = ((globalThis as unknown as { __vaultHealthCache?: { at: number; report: HealthReport | null } }).__vaultHealthCache ??= { at: 0, report: null })
+
+export function cachedHealthScan(now = Date.now()): HealthReport {
+  if (!HC.report || now - HC.at > HEALTH_TTL_MS) {
+    HC.report = scanVaultHealth()
+    HC.at = now
+  }
+  return HC.report
 }

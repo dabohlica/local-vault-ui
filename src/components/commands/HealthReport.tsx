@@ -172,7 +172,7 @@ export function HealthReport() {
           from each note&rsquo;s own first paragraph) <strong>and creates stub notes so broken
           <code>[[links]]</code> resolve</strong> — deterministic, fully local, your content preserved.
           Up to 25 notes at a time, each shown as a diff to approve (Apply stays pinned at the bottom).
-          Empty notes still need a human. (To also <em>add</em> new links across notes, use Interlink.)
+          Empty notes still need a human. (To also <em>add</em> new links across notes, use Connect notes.)
         </p>
       )}
 

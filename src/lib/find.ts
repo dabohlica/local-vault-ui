@@ -1,7 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 import { isMetaNote, listAllNotes, resolveVaultPath, stripFrontmatter } from '@/lib/vault'
-import { getChunk, lexicalSearch } from '@/lib/embeddings'
+import { getChunk, indexStats, isIndexBusy, lexicalSearch, queryTerms } from '@/lib/embeddings'
 import { foldText as fold, titleScore } from '@/lib/noteMatch'
 
 // "Find a note" for the search page and the ⌘K palette: note names first (what
@@ -55,6 +55,9 @@ function readSafe(notePath: string): string {
   try { return fs.readFileSync(resolveVaultPath(notePath), 'utf-8') } catch { return '' }
 }
 
+const SCAN_MAX_FILES = 3000
+const SCAN_MAX_MS = 150
+
 export function findNotes(query: string, limit = 20): FoundNote[] {
   const q = query.trim()
   if (!q) return []
@@ -76,6 +79,11 @@ export function findNotes(query: string, limit = 20): FoundNote[] {
     .forEach(x => push(x.p, 'title', snippetFor(readSafe(x.p), q)))
 
   // 2) Keyword hits from the index (best chunk per note).
+  let indexUsable = false
+  try {
+    const st = indexStats()
+    indexUsable = st.chunks > 0 && st.modelMatches && !isIndexBusy()
+  } catch { /* no index yet */ }
   try {
     for (const hit of lexicalSearch(q, 60)) {
       const c = getChunk(hit.id)
@@ -84,10 +92,15 @@ export function findNotes(query: string, limit = 20): FoundNote[] {
     }
   } catch { /* no index yet — the scan below covers it */ }
 
-  // 3) Plain substring scan (index empty, rebuilding, or a stopword-ish query).
-  if (out.length < limit) {
+  // 3) Plain substring scan — only when the index can't answer: empty or
+  // rebuilding, or a query with no indexable words ("ai", stopwords). It reads
+  // files synchronously, so it's capped to keep a keystroke from stalling the
+  // server on a big vault.
+  if (out.length < limit && (!indexUsable || queryTerms(q).length === 0)) {
     const needle = fold(q)
-    for (const n of notes) {
+    const started = Date.now()
+    for (const n of notes.slice(0, SCAN_MAX_FILES)) {
+      if (Date.now() - started > SCAN_MAX_MS) break
       if (seen.has(n.path)) continue
       const text = readSafe(n.path)
       if (fold(text).includes(needle)) push(n.path, 'text', snippetFor(text, q))
