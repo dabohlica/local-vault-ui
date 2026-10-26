@@ -6,7 +6,7 @@ import { Inbox, Sparkles, HeartPulse, CheckCircle2, FileText, ChevronRight, type
 import { Composer } from '@/components/home/Composer'
 import { CompanionAvatar } from '@/components/companion/Avatar'
 import { useCompanion } from '@/components/companion/CompanionContext'
-import { homeLine } from '@/lib/voice'
+import { homeLine, pokeLine } from '@/lib/voice'
 import { BriefingCard } from '@/components/dashboard/BriefingCard'
 import { RecapCard } from '@/components/home/RecapCard'
 import { ActivityTimelineCard } from '@/components/dashboard/ActivityTimelineCard'
@@ -36,6 +36,12 @@ function ago(iso: string): string {
 export default function HomePage() {
   const [home, setHome] = useState<Home | null>(null)
   const companion = useCompanion()
+  const [quip, setQuip] = useState<string | null>(null)
+  useEffect(() => {
+    if (!quip) return
+    const t = setTimeout(() => setQuip(null), 4500)
+    return () => clearTimeout(t)
+  }, [quip])
   const [today, setToday] = useState('')
 
   useEffect(() => {
@@ -71,12 +77,12 @@ export default function HomePage() {
     <div className="max-w-5xl mx-auto flex flex-col gap-8">
       <section className="flex flex-col gap-4 pt-2 md:pt-4">
         <div className="flex items-start gap-3 md:gap-4">
-          <CompanionAvatar kind={companion.kind} size={64} thinking={!!idx && !idx.ready && !idx.error} title={companion.name} className="mt-1" />
+          <CompanionAvatar live kind={companion.kind} size={112} thinking={!!idx && !idx.ready && !idx.error} title={companion.name} className="-mt-2 -ml-2" onPoke={() => setQuip(pokeLine(companion))} />
           <div className="min-w-0 flex-1">
             <p className="text-sm" style={{ color: 'var(--text-subtle)' }}>{today}</p>
             <h1 className="text-2xl md:text-3xl font-semibold tracking-tight mt-0.5" style={{ color: 'var(--text)' }}>{greeting()}</h1>
             <p className="speech inline-block mt-3 px-4 py-2.5 text-[15px] leading-relaxed" style={{ color: 'var(--text)' }}>
-              {homeLine(home && { ...home, index: home.index && { ready: home.index.ready, busy: home.index.busy, error: home.index.error } })}
+              {quip ?? homeLine(home && { ...home, index: home.index && { ready: home.index.ready, busy: home.index.busy, error: home.index.error } })}
             </p>
           </div>
         </div>

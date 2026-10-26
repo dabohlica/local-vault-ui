@@ -33,8 +33,8 @@ export function Sidebar({
         )}
         style={{ background: 'var(--bg-surface)', borderColor: 'var(--border-subtle)' }}
       >
-        <Link href="/chat" className="flex items-center gap-2.5 px-4 h-16" title={`Talk to ${companion.name}`}>
-          <CompanionAvatar kind={companion.kind} size={38} />
+        <Link href="/chat" className="flex items-center gap-2 px-3 h-16" title={`Talk to ${companion.name}`}>
+          <CompanionAvatar live kind={companion.kind} size={48} />
           <div className="min-w-0">
             <p className="text-[15px] font-semibold tracking-tight leading-tight" style={{ color: 'var(--text)' }}>{companion.name}</p>
             <p className="text-[11px] leading-tight truncate" style={{ color: 'var(--text-subtle)' }}>{companion.def.tagline}</p>

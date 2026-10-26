@@ -28,3 +28,31 @@ export function homeLine(s: HomeState | null): string {
   if (!parts.length) return 'Your notes are in good order. What’s on your mind?'
   return `I’ve ${list(parts)}. Or just tell me what’s on your mind.`
 }
+
+// What the companion says when you click it. Cycles so it doesn't repeat.
+const POKES: Record<string, string[]> = {
+  octopus: [
+    'Hello! Eight arms, all at your service.',
+    'Careful, I’m holding six notes and a cup of tea.',
+    'That tickles. Ask me anything — I’ve read it all twice.',
+    'Ink ready. What shall we write down?',
+    'Hey! Do you want me to argue with one of your ideas?',
+  ],
+  fox: [
+    'Hi! Got an idea I can poke holes in?',
+    'I heard that. What are we thinking about?',
+    'Quick question back: what are you avoiding today?',
+    'Ears up. Ask me something tricky.',
+  ],
+  penguin: [
+    'Hello. Everything is filed and in order.',
+    'Waddle waddle. What can I look up for you?',
+    'I just finished alphabetising your loose ends.',
+    'Cold flippers, warm archive. Ask away.',
+  ],
+}
+let pokeN = 0
+export function pokeLine(c: { kind: string; name: string }): string {
+  const lines = POKES[c.kind] ?? POKES.octopus
+  return lines[pokeN++ % lines.length]
+}

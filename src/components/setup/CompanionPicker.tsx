@@ -41,7 +41,7 @@ export function CompanionPicker() {
             <button key={kind} onClick={() => pick(kind)} aria-pressed={active}
               className="flex flex-col items-center gap-2 p-3 rounded-xl border transition-colors hover-surface"
               style={active ? { borderColor: 'var(--primary)', background: 'var(--primary-tint)' } : { borderColor: 'var(--border)' }}>
-              <CompanionAvatar kind={kind} size={56} />
+              <CompanionAvatar live kind={kind} size={120} />
               <span className="text-sm font-medium" style={{ color: active ? 'var(--primary)' : 'var(--text)' }}>{active ? companion.name : def.defaultName}</span>
               <span className="text-[11px] text-center leading-snug" style={{ color: 'var(--text-subtle)' }}>{def.creature.replace(/^an? /, '')}</span>
             </button>
