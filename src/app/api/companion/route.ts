@@ -7,5 +7,5 @@ export const dynamic = 'force-dynamic'
 // Which character keeps the notes (cheap; read on every page load).
 export async function GET() {
   const cfg = getConfig()
-  return NextResponse.json(resolveCompanion(cfg.companionKind, cfg.companionName))
+  return NextResponse.json(resolveCompanion(cfg.companionKind, cfg.companionName, cfg.companionColor))
 }

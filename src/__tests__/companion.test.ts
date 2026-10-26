@@ -4,13 +4,21 @@ import { buildRagPrompt } from '@/lib/prompts'
 
 describe('resolveCompanion', () => {
   it('defaults to Inka the octopus and follows the creature for default names', () => {
-    expect(resolveCompanion(undefined, undefined)).toEqual({ kind: 'octopus', name: 'Inka' })
-    expect(resolveCompanion('fox', '')).toEqual({ kind: 'fox', name: 'Fenn' })
-    expect(resolveCompanion('dragon', '')).toEqual({ kind: 'octopus', name: 'Inka' })
+    expect(resolveCompanion(undefined, undefined)).toEqual({ kind: 'octopus', name: 'Inka', color: 'ink' })
+    expect(resolveCompanion('fox', '')).toEqual({ kind: 'fox', name: 'Fenn', color: 'red' })
+    expect(resolveCompanion('dragon', '')).toEqual({ kind: 'octopus', name: 'Inka', color: 'ink' })
   })
   it('keeps a custom name, cleaned and capped', () => {
-    expect(resolveCompanion('penguin', '  Prof. Ö. Pling <b>  ')).toEqual({ kind: 'penguin', name: 'Prof. Ö. Pling b' })
+    expect(resolveCompanion('penguin', '  Prof. Ö. Pling <b>  ')).toEqual({ kind: 'penguin', name: 'Prof. Ö. Pling b', color: 'navy' })
     expect(resolveCompanion('fox', 'x'.repeat(40)).name).toHaveLength(24)
+  })
+})
+
+describe('palettes', () => {
+  it('keeps a valid colour for the creature and falls back to its default', () => {
+    expect(resolveCompanion('octopus', '', 'teal').color).toBe('teal')
+    expect(resolveCompanion('octopus', '', 'arctic').color).toBe('ink') // a fox colour
+    expect(resolveCompanion('fox', '', 'arctic').color).toBe('arctic')
   })
 })
 

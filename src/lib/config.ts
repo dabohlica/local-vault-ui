@@ -63,6 +63,7 @@ export type AppConfig = {
   // and what it's called ('' = the creature's default name).
   companionKind: string
   companionName: string
+  companionColor: string   // palette id from src/lib/companion.ts ('' = default)
 }
 
 function defaults(): AppConfig {
@@ -94,6 +95,7 @@ function defaults(): AppConfig {
     nightlyMaxMapPaths: 400,
     companionKind: 'octopus',
     companionName: '',
+    companionColor: '',
   }
 }
 

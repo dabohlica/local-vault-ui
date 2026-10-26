@@ -12,6 +12,7 @@ import type { Mood } from './stage'
 
 type Props = {
   kind: CompanionKind
+  color?: string
   size?: number
   live?: boolean
   thinking?: boolean
@@ -40,16 +41,16 @@ export function CompanionAvatar(props: Props) {
   return props.live ? <Live {...props} /> : <Still {...props} />
 }
 
-function Still({ kind, size = 40, thinking, title, className = '' }: Props) {
+function Still({ kind, color = '', size = 40, thinking, title, className = '' }: Props) {
   const [src, setSrc] = useState<string | null>(null)
   useEffect(() => {
     let alive = true
     void import('./stage')
-      .then(m => m.stillImage(kind, Math.min(384, Math.ceil(size * Math.min(2, window.devicePixelRatio || 1) * 1.25))))
+      .then(m => m.stillImage(kind, color, Math.min(384, Math.ceil(size * Math.min(2, window.devicePixelRatio || 1) * 1.25))))
       .then(url => { if (alive) setSrc(url) })
       .catch(() => {})
     return () => { alive = false }
-  }, [kind, size])
+  }, [kind, color, size])
   if (!src) return <FlatAvatar kind={kind} size={size} thinking={thinking} title={title} className={className} />
   return (
     <span className={`companion relative inline-flex flex-shrink-0 ${thinking ? 'companion-thinking' : ''} ${className}`} style={{ width: size, height: size }}>
@@ -60,8 +61,14 @@ function Still({ kind, size = 40, thinking, title, className = '' }: Props) {
   )
 }
 
-function Live({ kind, size = 64, thinking, talking, title, className = '', onPoke }: Props) {
+// The live canvas is PAD× the slot so a reaching arm isn't clipped; it ignores
+// the pointer, and only the slot itself reacts to hover and clicks.
+const PAD = 2.2
+
+function Live({ kind, color = '', size = 64, thinking, talking, title, className = '', onPoke }: Props) {
   const canvas = useRef<HTMLCanvasElement>(null)
+  const slot = useRef<HTMLSpanElement>(null)
+  const canvasPx = Math.round(size * PAD)
   const moodRef = useRef<Mood>('idle')
   const api = useRef<{ poke: () => void; hover: (h: boolean) => void } | null>(null)
   moodRef.current = thinking ? 'thinking' : talking ? 'talking' : 'idle'
@@ -71,27 +78,37 @@ function Live({ kind, size = 64, thinking, talking, title, className = '', onPok
     if (!el) return
     let disposed = false
     let cleanup = () => {}
-    void import('./stage').then(({ Animator, makeScene }) => import('three').then(THREE => {
+    void import('./stage').then(({ Animator, makeScene, worldPerPx }) => import('three').then(THREE => {
       if (disposed) return
       const renderer = new THREE.WebGLRenderer({ canvas: el, alpha: true, antialias: true, powerPreference: 'low-power' })
       const dpr = Math.min(2, window.devicePixelRatio || 1)
       renderer.setPixelRatio(dpr)
-      renderer.setSize(size, size, false)
+      renderer.setSize(canvasPx, canvasPx, false)
       renderer.toneMapping = THREE.ACESFilmicToneMapping
       renderer.toneMappingExposure = 0.95
       renderer.outputColorSpace = THREE.SRGBColorSpace
-      const stage = makeScene(renderer)
-      const anim = new Animator(kind)
+      const stage = makeScene(renderer, PAD)
+      const anim = new Animator(kind, color)
       anim.reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
       stage.scene.add(anim.rig.root)
 
       // Look at the cursor anywhere on the page, relative to where we sit.
       const onMove = (e: PointerEvent) => {
-        const r = el.getBoundingClientRect()
+        const r = (slot.current ?? el).getBoundingClientRect()
         const cx = r.left + r.width / 2, cy = r.top + r.height * 0.42
         const reach = Math.max(260, r.width * 3)
         anim.pointer = { x: (e.clientX - cx) / reach, y: -(e.clientY - cy) / reach }
         anim.notePointer()
+        // Close by? Then a tentacle reaches for it (kept inside the frame).
+        const dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2)
+        const d = Math.hypot(dx, dy)
+        const far = r.width * 2.4, close = r.width * 1.1
+        anim.near = Math.min(1, Math.max(0, (far - d) / (far - close)))
+        const w = worldPerPx(r.width)
+        let tx = dx * w, ty = -dy * w + 0.08
+        const lim = 2.5, len = Math.hypot(tx, ty)
+        if (len > lim) { tx *= lim / len; ty *= lim / len }
+        anim.reach = { x: tx, y: ty }
       }
       window.addEventListener('pointermove', onMove, { passive: true })
       api.current = { poke: () => anim.poke(), hover: h => { anim.hover = h } }
@@ -130,18 +147,24 @@ function Live({ kind, size = 64, thinking, talking, title, className = '', onPok
       }
     })).catch(() => {})
     return () => { disposed = true; cleanup() }
-  }, [kind, size])
+  }, [kind, color, size, canvasPx])
 
+  const off = (canvasPx - size) / 2
   return (
-    <span className={`companion relative inline-flex flex-shrink-0 ${className}`} style={{ width: size, height: size }}>
+    <span ref={slot} className={`companion relative inline-flex flex-shrink-0 ${className}`} style={{ width: size, height: size }}>
       <canvas
         ref={canvas}
-        width={size}
-        height={size}
-        style={{ width: size, height: size, cursor: 'pointer', touchAction: 'manipulation' }}
+        width={canvasPx}
+        height={canvasPx}
+        aria-hidden
+        style={{ position: 'absolute', left: -off, top: -off, width: canvasPx, height: canvasPx, pointerEvents: 'none', zIndex: 5 }}
+      />
+      <span
         role={title ? 'img' : undefined}
         aria-label={title}
         aria-hidden={title ? undefined : true}
+        className="absolute inset-0 rounded-full"
+        style={{ cursor: 'pointer', touchAction: 'manipulation', zIndex: 6 }}
         onPointerEnter={() => api.current?.hover(true)}
         onPointerLeave={() => api.current?.hover(false)}
         onClick={e => { e.preventDefault(); e.stopPropagation(); api.current?.poke(); onPoke?.() }}

@@ -13,7 +13,7 @@ const Ctx = createContext<Value>({ ...DEFAULT, def: COMPANIONS.octopus, refresh:
 export function CompanionProvider({ children }: { children: React.ReactNode }) {
   const [c, setC] = useState<Companion>(DEFAULT)
   const refresh = useCallback(() => {
-    fetch('/api/companion', { cache: 'no-store' }).then(r => r.json()).then((d: Companion) => setC(resolveCompanion(d.kind, d.name))).catch(() => {})
+    fetch('/api/companion', { cache: 'no-store' }).then(r => r.json()).then((d: Companion) => setC(resolveCompanion(d.kind, d.name, d.color))).catch(() => {})
   }, [])
   useEffect(() => {
     refresh()

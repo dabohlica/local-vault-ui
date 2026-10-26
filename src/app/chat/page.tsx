@@ -344,7 +344,7 @@ function ChatView() {
           <div className="max-w-3xl mx-auto flex flex-col gap-6">
             {messages.length === 0 && !loading && (
               <div className="flex flex-col items-center text-center gap-4 pt-[6vh]">
-                <CompanionAvatar live kind={companion.kind} size={150} title={companion.name} />
+                <CompanionAvatar live kind={companion.kind} color={companion.color} size={150} title={companion.name} />
                 <div className="max-w-md">
                   <h1 className="text-lg font-semibold" style={{ color: 'var(--text)' }}>
                     {mode === 'spar' ? 'Try me. I’ll argue back.' : `Hi, I’m ${companion.name}.`}
@@ -372,8 +372,8 @@ function ChatView() {
             ) : (
               <div key={i} className="flex gap-3 min-w-0">
                 {streaming && i === messages.length - 1
-                  ? <CompanionAvatar live talking kind={companion.kind} size={40} className="-mt-1 hidden sm:inline-flex" />
-                  : <CompanionAvatar kind={companion.kind} size={40} className="-mt-1 hidden sm:inline-flex" />}
+                  ? <CompanionAvatar live talking kind={companion.kind} color={companion.color} size={40} className="-mt-1 hidden sm:inline-flex" />
+                  : <CompanionAvatar kind={companion.kind} color={companion.color} size={40} className="-mt-1 hidden sm:inline-flex" />}
                 <div className="flex flex-col gap-3 min-w-0 flex-1">
                 <p className="text-xs font-semibold -mb-1.5" style={{ color: 'var(--text-subtle)' }}>{companion.name}</p>
                 <div className="markdown-body chat-answer">
@@ -444,7 +444,7 @@ function ChatView() {
 
             {loading && !streaming && (
               <div className="flex items-center gap-3 text-sm" style={{ color: 'var(--text-subtle)' }}>
-                <CompanionAvatar live thinking kind={companion.kind} size={48} />
+                <CompanionAvatar live thinking kind={companion.kind} color={companion.color} size={48} />
                 {mode === 'spar' ? `${companion.name} is looking for counter-arguments in your notes…` : `${companion.name} is reading your notes…`}
               </div>
             )}

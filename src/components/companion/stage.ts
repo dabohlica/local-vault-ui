@@ -9,6 +9,13 @@ import { buildRig, type Rig, type RigState } from './rig'
 
 export type Mood = 'idle' | 'thinking' | 'talking'
 
+const CAMERA_Z = 7.3
+const CAMERA_FOV = 28
+// World units per CSS pixel at the character's depth, for a canvas `size` px tall.
+export function worldPerPx(size: number): number {
+  return (2 * CAMERA_Z * Math.tan((CAMERA_FOV * Math.PI) / 360)) / size
+}
+
 export function webglAvailable(): boolean {
   try {
     const c = document.createElement('canvas')
@@ -30,7 +37,9 @@ function shadowTexture(): THREE.Texture {
   return t
 }
 
-export function makeScene(renderer: THREE.WebGLRenderer) {
+// `pad` > 1 renders into a larger canvas with the character at the same pixel
+// size, leaving room around it (e.g. for an arm reaching out).
+export function makeScene(renderer: THREE.WebGLRenderer, pad = 1) {
   const scene = new THREE.Scene()
   const pmrem = new THREE.PMREMGenerator(renderer)
   const env = pmrem.fromScene(new RoomEnvironment(), 0.04).texture
@@ -44,8 +53,8 @@ export function makeScene(renderer: THREE.WebGLRenderer) {
   const fill = new THREE.DirectionalLight('#cfe0ff', 0.5)
   fill.position.set(-3, -1, 4)
   scene.add(key, rim, fill)
-  const camera = new THREE.PerspectiveCamera(28, 1, 0.1, 50)
-  camera.position.set(0, 0.25, 7.3)
+  const camera = new THREE.PerspectiveCamera(CAMERA_FOV, 1, 0.1, 50)
+  camera.position.set(0, 0.25, CAMERA_Z * pad)
   camera.lookAt(0, 0.02, 0)
   const shadowTex = shadowTexture()
   const shadow = new THREE.Mesh(
@@ -69,7 +78,7 @@ const damp = (cur: number, target: number, rate: number, dt: number) => cur + (t
 // Drives one rig over time from inputs.
 export class Animator {
   readonly rig: Rig
-  private s: RigState = { t: 0, lookX: 0, lookY: 0, blink: 0, happy: 0, think: 0, talk: 0, wave: 0, excite: 0 }
+  private s: RigState = { t: 0, lookX: 0, lookY: 0, blink: 0, happy: 0, think: 0, talk: 0, wave: 0, excite: 0, near: 0, reachX: 0.8, reachY: 0 }
   private nextBlink = 1.5
   private blinkT = -1
   private pokeT = -1
@@ -78,16 +87,21 @@ export class Animator {
   // inputs
   pointer: { x: number; y: number } | null = null // -1..1 relative to the avatar
   hover = false
+  near = 0                                          // 0..1 cursor proximity
+  reach = { x: 0.8, y: 0 }                          // cursor in world units
+  greet = true                                      // wave hello when first shown
   mood: Mood = 'idle'
   reducedMotion = false
 
-  constructor(kind: CompanionKind) {
-    this.rig = buildRig(kind)
+  private readonly reaches: boolean
+  constructor(kind: CompanionKind, color?: string) {
+    this.rig = buildRig(kind, color)
+    this.reaches = kind === 'octopus'
   }
 
   poke() { this.pokeT = this.s.t }
   // Something is happening that deserves full frame rate.
-  busy(): boolean { return this.hover || this.pokeT >= 0 || this.mood !== 'idle' || this.s.happy > 0.02 }
+  busy(): boolean { return this.hover || this.pokeT >= 0 || this.mood !== 'idle' || this.s.happy > 0.02 || this.s.near > 0.02 || this.s.wave > 0.02 }
   notePointer() { this.lastPointer = this.s.t }
 
   step(dt: number) {
@@ -115,7 +129,13 @@ export class Animator {
     }
 
     s.happy = damp(s.happy, this.hover ? 1 : 0, 6, dt)
-    s.wave = damp(s.wave, this.hover && this.mood === 'idle' ? 1 : 0, 4, dt)
+    // Hello wave when first shown; the octopus reaches instead of waving on hover.
+    const greeting = this.greet && s.t > 0.4 && s.t < 2.6
+    s.wave = damp(s.wave, (greeting || (this.hover && !this.reaches)) && this.mood === 'idle' ? 1 : 0, 4, dt)
+    const near = this.mood === 'idle' && s.t - this.lastPointer < 4 ? this.near : 0
+    s.near = damp(s.near, near, 5, dt)
+    s.reachX = damp(s.reachX, this.reach.x, 10, dt)
+    s.reachY = damp(s.reachY, this.reach.y - this.rig.root.position.y, 10, dt)
     s.think = damp(s.think, this.mood === 'thinking' ? 1 : 0, 3, dt)
     const talkTarget = this.mood === 'talking' ? 0.35 + 0.65 * Math.abs(Math.sin(s.t * 11) * Math.sin(s.t * 4.3)) : 0
     s.talk = damp(s.talk, talkTarget, 18, dt)
@@ -151,8 +171,8 @@ export class Animator {
 // context. Cached per kind.
 const stills = new Map<string, Promise<string>>()
 
-export function stillImage(kind: CompanionKind, px = 192): Promise<string> {
-  const key = `${kind}:${px}`
+export function stillImage(kind: CompanionKind, color: string, px = 192): Promise<string> {
+  const key = `${kind}:${color}:${px}`
   const hit = stills.get(key)
   if (hit) return hit
   const job = new Promise<string>((resolve, reject) => {
@@ -164,7 +184,8 @@ export function stillImage(kind: CompanionKind, px = 192): Promise<string> {
       renderer.toneMappingExposure = 0.95
       renderer.outputColorSpace = THREE.SRGBColorSpace
       const stage = makeScene(renderer)
-      const anim = new Animator(kind)
+      const anim = new Animator(kind, color)
+      anim.greet = false
       stage.scene.add(anim.rig.root)
       anim.mood = 'idle'
       anim.pointer = { x: 0.15, y: 0.05 }

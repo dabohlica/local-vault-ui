@@ -39,16 +39,41 @@ export const COMPANIONS: Record<CompanionKind, CompanionDef> = {
 
 export const COMPANION_KINDS = Object.keys(COMPANIONS) as CompanionKind[]
 
-export type Companion = { kind: CompanionKind; name: string }
+// Colourways. The first one is the creature's default.
+export type Palette = { id: string; name: string; body: string; spots: string; tips: string; sheen: string; brow: string }
+
+export const PALETTES: Record<CompanionKind, Palette[]> = {
+  octopus: [
+    { id: 'ink', name: 'Ink', body: '#5E5CE6', spots: '#4644C4', tips: '#2A2580', sheen: '#C3C0FF', brow: '#2A2580' },
+    { id: 'coral', name: 'Coral', body: '#FF5A36', spots: '#D9401F', tips: '#A82E15', sheen: '#FFB199', brow: '#8A2A14' },
+    { id: 'teal', name: 'Teal', body: '#17B3A6', spots: '#0E8C82', tips: '#0A5953', sheen: '#9FF0E6', brow: '#0A4A45' },
+    { id: 'lilac', name: 'Lilac', body: '#B27CF2', spots: '#9258DA', tips: '#5F2FA6', sheen: '#E6D2FF', brow: '#4E2590' },
+  ],
+  fox: [
+    { id: 'red', name: 'Red fox', body: '#F2701D', spots: '#D45A10', tips: '#3B2A26', sheen: '#FFB27A', brow: '#3B2A26' },
+    { id: 'arctic', name: 'Arctic', body: '#E9EEF5', spots: '#C9D3E0', tips: '#5B6577', sheen: '#FFFFFF', brow: '#5B6577' },
+  ],
+  penguin: [
+    { id: 'navy', name: 'Navy', body: '#24304D', spots: '#1A2440', tips: '#FFA43A', sheen: '#6F86C4', brow: '#141B30' },
+    { id: 'emperor', name: 'Emperor', body: '#2B2D33', spots: '#1E2025', tips: '#FFB52E', sheen: '#8A8F9C', brow: '#121317' },
+  ],
+}
+
+export function paletteFor(kind: CompanionKind, id?: string | null): Palette {
+  const list = PALETTES[kind]
+  return list.find(p => p.id === id) ?? list[0]
+}
+
+export type Companion = { kind: CompanionKind; name: string; color: string }
 
 export function isCompanionKind(k: unknown): k is CompanionKind {
   return typeof k === 'string' && (COMPANION_KINDS as string[]).includes(k)
 }
 
-export function resolveCompanion(kind: unknown, name: unknown): Companion {
+export function resolveCompanion(kind: unknown, name: unknown, color?: unknown): Companion {
   const k = isCompanionKind(kind) ? kind : 'octopus'
   const n = typeof name === 'string' ? name.replace(/[^0-9A-Za-z\u00c0-\u024f .'-]/g, '').trim().slice(0, 24) : ''
-  return { kind: k, name: n || COMPANIONS[k].defaultName }
+  return { kind: k, name: n || COMPANIONS[k].defaultName, color: paletteFor(k, typeof color === 'string' ? color : null).id }
 }
 
 export type ChatMode = 'ask' | 'spar'

@@ -77,7 +77,7 @@ export default function HomePage() {
     <div className="max-w-5xl mx-auto flex flex-col gap-8">
       <section className="flex flex-col gap-4 pt-2 md:pt-4">
         <div className="flex items-start gap-3 md:gap-4">
-          <CompanionAvatar live kind={companion.kind} size={112} thinking={!!idx && !idx.ready && !idx.error} title={companion.name} className="-mt-2 -ml-2" onPoke={() => setQuip(pokeLine(companion))} />
+          <CompanionAvatar live kind={companion.kind} color={companion.color} size={112} thinking={!!idx && !idx.ready && !idx.error} title={companion.name} className="-mt-2 -ml-2" onPoke={() => setQuip(pokeLine(companion))} />
           <div className="min-w-0 flex-1">
             <p className="text-sm" style={{ color: 'var(--text-subtle)' }}>{today}</p>
             <h1 className="text-2xl md:text-3xl font-semibold tracking-tight mt-0.5" style={{ color: 'var(--text)' }}>{greeting()}</h1>

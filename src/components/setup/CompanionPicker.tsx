@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { CompanionAvatar } from '@/components/companion/Avatar'
 import { useCompanion } from '@/components/companion/CompanionContext'
 import { useToast } from '@/components/shared/Toast'
-import { COMPANIONS, COMPANION_KINDS, type CompanionKind } from '@/lib/companion'
+import { COMPANIONS, COMPANION_KINDS, PALETTES, type CompanionKind } from '@/lib/companion'
 
 // Choose who keeps your notes, and what they're called.
 export function CompanionPicker() {
@@ -14,7 +14,7 @@ export function CompanionPicker() {
 
   useEffect(() => { setName(companion.name) }, [companion.name])
 
-  async function save(patch: { companionKind?: CompanionKind; companionName?: string }) {
+  async function save(patch: { companionKind?: CompanionKind; companionName?: string; companionColor?: string }) {
     const res = await fetch('/api/setup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) })
     if (!res.ok) { showToast('Couldn’t save that', 'error'); return }
     window.dispatchEvent(new Event('companion:updated'))
@@ -41,13 +41,31 @@ export function CompanionPicker() {
             <button key={kind} onClick={() => pick(kind)} aria-pressed={active}
               className="flex flex-col items-center gap-2 p-3 rounded-xl border transition-colors hover-surface"
               style={active ? { borderColor: 'var(--primary)', background: 'var(--primary-tint)' } : { borderColor: 'var(--border)' }}>
-              <CompanionAvatar live kind={kind} size={120} />
+              <CompanionAvatar live kind={kind} color={active ? companion.color : ''} size={120} />
               <span className="text-sm font-medium" style={{ color: active ? 'var(--primary)' : 'var(--text)' }}>{active ? companion.name : def.defaultName}</span>
               <span className="text-[11px] text-center leading-snug" style={{ color: 'var(--text-subtle)' }}>{def.creature.replace(/^an? /, '')}</span>
             </button>
           )
         })}
       </div>
+      {PALETTES[companion.kind].length > 1 && (
+        <div className="flex flex-col gap-1.5">
+          <span className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Colour</span>
+          <div className="flex flex-wrap gap-2">
+            {PALETTES[companion.kind].map(p => {
+              const on = p.id === companion.color
+              return (
+                <button key={p.id} onClick={() => void save({ companionColor: p.id })} aria-pressed={on} title={p.name}
+                  className="flex items-center gap-2 pl-1.5 pr-3 py-1.5 rounded-full border text-xs font-medium hover-surface"
+                  style={on ? { borderColor: 'var(--primary)', color: 'var(--primary)' } : { borderColor: 'var(--border)', color: 'var(--text-muted)' }}>
+                  <span className="w-5 h-5 rounded-full" style={{ background: `radial-gradient(circle at 35% 30%, ${p.sheen}, ${p.body} 55%, ${p.tips})` }} />
+                  {p.name}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
       <label className="flex flex-col gap-1.5">
         <span className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Name</span>
         <div className="flex gap-2">

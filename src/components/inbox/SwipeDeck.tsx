@@ -150,7 +150,7 @@ export function SwipeDeck({
 
               {top.why && (
                 <div className="rounded-xl p-3 text-sm flex gap-2.5" style={{ background: 'var(--primary-tint)', color: 'var(--text)' }}>
-                  <CompanionAvatar kind={companion.kind} size={34} className="-mt-0.5" />
+                  <CompanionAvatar kind={companion.kind} color={companion.color} size={34} className="-mt-0.5" />
                   <span><span className="block text-[11px] font-semibold uppercase tracking-wide" style={{ color: 'var(--primary)' }}>Why {companion.name} picked it</span>{top.why}</span>
                 </div>
               )}
