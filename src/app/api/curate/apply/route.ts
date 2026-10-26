@@ -4,6 +4,7 @@ import path from 'path'
 import { resolveVaultPath, moveNote, deleteNote, fileHash, changeTarget } from '@/lib/vault'
 import { syncIndex } from '@/lib/embeddings'
 import { recordOperation, type OpChange } from '@/lib/opsLog'
+import { checkWrite } from '@/lib/writeGuard'
 
 type Change = {
   path: string
@@ -15,6 +16,22 @@ type Change = {
   // didn't exist). If the file has changed since, the change is refused rather
   // than overwriting edits made in between. Omitted = no check (legacy callers).
   baseHash?: string | null
+  // The user explicitly approved an update that removes over half the note.
+  confirmShrink?: boolean
+}
+
+function readOrNull(rel: string): string | null {
+  try { return fs.readFileSync(resolveVaultPath(rel), 'utf-8') } catch { return null }
+}
+
+// Last line of defence for every write (see src/lib/writeGuard.ts): never write
+// a placeholder over a note, and never silently halve one.
+function guard(change: Change): void {
+  if (change.content === undefined || change.action === 'delete') return
+  const target = change.action === 'move' ? (change.from ?? change.path) : change.path
+  const g = checkWrite(readOrNull(target), change.content)
+  if (g.blocked) throw new Error(g.blocked)
+  if (g.needsConfirm && !change.confirmShrink) throw new Error(`${g.warnings[0]}. Tick it explicitly to apply.`)
 }
 
 // Apply a reviewed set of vault changes: create/update writes, plus the caretaker
@@ -40,6 +57,7 @@ export async function POST(req: NextRequest) {
             throw new Error('changed since this proposal was made — not applied, so your newer edits are kept. Re-run the proposal.')
           }
         }
+        guard(change)
         switch (change.action) {
           case 'move': {
             const to = change.to ?? change.path

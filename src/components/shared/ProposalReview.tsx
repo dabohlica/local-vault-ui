@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Loader2, Check, X, FilePlus, FileEdit, ArrowRightLeft, Trash2, AlertTriangle } from 'lucide-react'
 import { DiffView } from '@/components/curate/DiffView'
 import { useToast } from '@/components/shared/Toast'
+import { checkWrite } from '@/lib/writeGuard'
 
 export type Change = {
   path: string
@@ -17,6 +18,10 @@ export type Change = {
   warnings?: string[]
   // Version of the target this change was built against (see /api/curate/apply).
   baseHash?: string | null
+  // Set by the write guard: `blocked` can't be applied at all; `needsConfirm`
+  // (a big shrink) starts unticked and is sent as confirmShrink when ticked.
+  blocked?: string
+  needsConfirm?: boolean
 }
 export type ProposalResponse = { changes: Change[]; log_entry: string; summary: string; origin?: string; error?: string; raw?: string }
 
@@ -99,9 +104,20 @@ export function ProposalReview({ result, onApplied, onDiscard }: Props) {
           return pinBase({ ...c, before: null, action: 'create' as const }, null)
         })
       )
+      const guarded = enriched.map(c => {
+        if (c.action === 'delete') return c
+        const g = checkWrite(c.before ?? null, c.content)
+        return {
+          ...c,
+          blocked: g.blocked ?? undefined,
+          needsConfirm: g.needsConfirm || undefined,
+          warnings: [...(c.warnings ?? []), ...g.warnings],
+        }
+      })
       if (active) {
-        setChanges(enriched)
-        setApproved(new Set(enriched.map(changeKey)))
+        setChanges(guarded)
+        // Risky changes start unticked; blocked ones can't be ticked at all.
+        setApproved(new Set(guarded.filter(c => !c.blocked && !c.needsConfirm).map(changeKey)))
       }
     })()
     return () => { active = false }
@@ -125,7 +141,7 @@ export function ProposalReview({ result, onApplied, onDiscard }: Props) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          changes: selected.map(({ path, action, content, from, to, baseHash }) => ({ path, action, content, from, to, baseHash })),
+          changes: selected.map(({ path, action, content, from, to, baseHash, needsConfirm }) => ({ path, action, content, from, to, baseHash, confirmShrink: needsConfirm || undefined })),
           log_entry: result.log_entry,
           origin: result.origin,
         }),
@@ -188,10 +204,15 @@ export function ProposalReview({ result, onApplied, onDiscard }: Props) {
                 </span>
               </div>
               <label className="flex items-center gap-1.5 text-xs cursor-pointer flex-shrink-0" style={{ color: 'var(--text-muted)' }}>
-                <input type="checkbox" checked={approved.has(changeKey(change))} onChange={() => toggle(changeKey(change))} />
-                Apply this change
+                <input type="checkbox" disabled={!!change.blocked} checked={approved.has(changeKey(change))} onChange={() => toggle(changeKey(change))} />
+                {change.blocked ? 'Can’t apply' : 'Apply this change'}
               </label>
             </div>
+            {change.blocked && (
+              <p className="flex items-start gap-1.5 text-xs rounded-lg px-2.5 py-2" style={{ color: 'var(--danger)', background: 'var(--bg-elevated)' }}>
+                <AlertTriangle size={12} className="mt-0.5" style={{ flexShrink: 0 }} /> {change.blocked}
+              </p>
+            )}
             {change.warnings?.map(w => (
               <p key={w} className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--warning)' }}>
                 <AlertTriangle size={12} style={{ flexShrink: 0 }} /> {w}
