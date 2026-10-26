@@ -36,8 +36,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     return () => { active = false }
   }, [pathname, isSetup, router])
 
-  // Onboarding: full-bleed, no sidebar/topbar.
-  if (isSetup) {
+  // Onboarding: full-bleed, no sidebar/topbar. Once a vault is configured,
+  // Settings lives inside the normal app.
+  if (isSetup && configured === false) {
     return <main className="min-h-screen overflow-y-auto p-8">{children}</main>
   }
 

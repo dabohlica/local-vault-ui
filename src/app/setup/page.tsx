@@ -78,6 +78,7 @@ const SUGGESTIONS: Record<Role, { name: string; note: string }[]> = {
 export default function SetupPage() {
   const router = useRouter()
   const [status, setStatus] = useState<Status | null>(null)
+  const [advanced, setAdvanced] = useState(false)
   const [vaultInput, setVaultInput] = useState('')
   const [savingVault, setSavingVault] = useState(false)
   const [vaultError, setVaultError] = useState<string | null>(null)
@@ -261,7 +262,7 @@ export default function SetupPage() {
       {allReady ? (
         <div>
           <h1 className="text-xl md:text-2xl font-semibold tracking-tight" style={{ color: 'var(--text)' }}>Settings</h1>
-          <p className="text-sm mt-1" style={{ color: 'var(--text-subtle)' }}>Your vault, the local models, and when things run. Everything stays on this Mac.</p>
+          <p className="text-sm mt-1" style={{ color: 'var(--text-subtle)' }}>Who keeps your notes, and how. Everything stays on this Mac.</p>
         </div>
       ) : (
         <div className="text-center">
@@ -277,6 +278,18 @@ export default function SetupPage() {
 
       <CompanionPicker />
 
+      {/* Once everything works, the technical setup folds away. */}
+      {allReady && (
+        <button onClick={() => setAdvanced(v => !v)} className="card p-4 flex items-center justify-between text-left hover-surface">
+          <span>
+            <span className="block text-sm font-semibold" style={{ color: 'var(--text)' }}>Advanced</span>
+            <span className="block text-xs mt-0.5" style={{ color: 'var(--text-subtle)' }}>Vault folder, local AI models, search index, overnight schedule, diagnostics</span>
+          </span>
+          <span className="text-xs font-medium" style={{ color: 'var(--primary)' }}>{advanced ? 'Hide' : 'Show'}</span>
+        </button>
+      )}
+
+      {(!allReady || advanced) && (<>
       {/* Step 1 — Vault */}
       <StepCard n={1} title="Connect your vault" icon={FolderOpen} done={vaultReady}>
         <p className="text-xs mb-2" style={{ color: 'var(--text-muted)' }}>
@@ -536,8 +549,9 @@ export default function SetupPage() {
 
       {/* Diagnostics — only once a vault is connected, to debug indexing wiring */}
       {vaultReady && <DiagnosticsCard />}
+      </>)}
 
-      <button
+      {!allReady && <button
         onClick={() => router.push('/')}
         disabled={!allReady}
         className="flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-sm font-semibold transition-all hover:scale-[1.01] disabled:opacity-40 disabled:cursor-not-allowed"
@@ -545,7 +559,7 @@ export default function SetupPage() {
       >
         {allReady ? 'Enter your vault' : 'Complete the steps above to continue'}
         {allReady && <ArrowRight size={16} />}
-      </button>
+      </button>}
     </div>
   )
 }
