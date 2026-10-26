@@ -50,7 +50,7 @@ export function makeScene(renderer: THREE.WebGLRenderer, pad = 1) {
   key.position.set(2.5, 4, 5)
   const rim = new THREE.DirectionalLight('#ffd9c4', 1.6)
   rim.position.set(-4, 2.5, -3)
-  const fill = new THREE.DirectionalLight('#cfe0ff', 0.5)
+  const fill = new THREE.DirectionalLight('#8DB8FF', 0.9)
   fill.position.set(-3, -1, 4)
   scene.add(key, rim, fill)
   const camera = new THREE.PerspectiveCamera(CAMERA_FOV, 1, 0.1, 50)

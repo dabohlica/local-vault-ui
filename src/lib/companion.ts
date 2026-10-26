@@ -44,10 +44,10 @@ export type Palette = { id: string; name: string; body: string; spots: string; t
 
 export const PALETTES: Record<CompanionKind, Palette[]> = {
   octopus: [
-    { id: 'ink', name: 'Ink', body: '#5E5CE6', spots: '#4644C4', tips: '#2A2580', sheen: '#C3C0FF', brow: '#2A2580' },
-    { id: 'coral', name: 'Coral', body: '#FF5A36', spots: '#D9401F', tips: '#A82E15', sheen: '#FFB199', brow: '#8A2A14' },
-    { id: 'teal', name: 'Teal', body: '#17B3A6', spots: '#0E8C82', tips: '#0A5953', sheen: '#9FF0E6', brow: '#0A4A45' },
-    { id: 'lilac', name: 'Lilac', body: '#B27CF2', spots: '#9258DA', tips: '#5F2FA6', sheen: '#E6D2FF', brow: '#4E2590' },
+    { id: 'orange', name: 'Orange', body: '#EE7E34', spots: '#F7B247', tips: '#F8C9A2', sheen: '#FFD7B0', brow: '#3F5A6B' },
+    { id: 'ink', name: 'Ink', body: '#5E5CE6', spots: '#8E8CFF', tips: '#CFCBFF', sheen: '#C3C0FF', brow: '#2E3A4A' },
+    { id: 'teal', name: 'Teal', body: '#16A396', spots: '#5FD6C2', tips: '#C2F2E8', sheen: '#9FF0E6', brow: '#3D4766' },
+    { id: 'lilac', name: 'Lilac', body: '#A874E8', spots: '#D4A9FF', tips: '#EEDDFF', sheen: '#E6D2FF', brow: '#3F5A6B' },
   ],
   fox: [
     { id: 'red', name: 'Red fox', body: '#F2701D', spots: '#D45A10', tips: '#3B2A26', sheen: '#FFB27A', brow: '#3B2A26' },
