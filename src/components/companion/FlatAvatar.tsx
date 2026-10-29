@@ -89,7 +89,8 @@ function Penguin() {
   )
 }
 
-const DRAW: Record<CompanionKind, () => JSX.Element> = { octopus: Octopus, fox: Fox, penguin: Penguin }
+// Orrin has no flat drawing: he is always shown from his rendered frames (OwlAvatar)
+const DRAW: Partial<Record<CompanionKind, () => JSX.Element>> = { octopus: Octopus, fox: Fox, penguin: Penguin }
 
 export function FlatAvatar({
   kind,

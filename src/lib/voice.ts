@@ -31,6 +31,13 @@ export function homeLine(s: HomeState | null): string {
 
 // What the companion says when you click it. Cycles so it doesn't repeat.
 const POKES: Record<string, string[]> = {
+  owl: [
+    'Hoo! Ah, it’s you. What shall we look up?',
+    'Careful, the orb is warm.',
+    'I’ve read every page of your notes. Twice, by orb-light.',
+    'Ask me something. I know which shelf it’s on.',
+    'Hm? Shall I argue with one of your ideas?',
+  ],
   octopus: [
     'Hello! Eight arms, all at your service.',
     'Careful, I’m holding six notes and a cup of tea.',

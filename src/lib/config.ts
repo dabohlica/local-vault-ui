@@ -93,7 +93,7 @@ function defaults(): AppConfig {
     nightlySkipThreshold: 60,
     nightlyMaxBatches: 4,
     nightlyMaxMapPaths: 400,
-    companionKind: 'octopus',
+    companionKind: 'owl',
     companionName: '',
     companionColor: '',
   }

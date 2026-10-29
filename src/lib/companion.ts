@@ -2,7 +2,7 @@
 // One definition shared by the UI (avatar, copy) and the prompts (persona), so
 // the voice is the same everywhere. Pure — safe in client and server code.
 
-export type CompanionKind = 'octopus' | 'fox' | 'penguin'
+export type CompanionKind = 'owl' | 'octopus' | 'fox' | 'penguin'
 
 export type CompanionDef = {
   kind: CompanionKind
@@ -14,6 +14,13 @@ export type CompanionDef = {
 }
 
 export const COMPANIONS: Record<CompanionKind, CompanionDef> = {
+  owl: {
+    kind: 'owl',
+    defaultName: 'Orrin',
+    creature: 'an old, well-read owl librarian',
+    tagline: 'keeper of your library',
+    flavour: 'You read by the light of a small glowing orb and keep a heavy tome; you can always find the right page.',
+  },
   octopus: {
     kind: 'octopus',
     defaultName: 'Inka',
@@ -43,6 +50,10 @@ export const COMPANION_KINDS = Object.keys(COMPANIONS) as CompanionKind[]
 export type Palette = { id: string; name: string; body: string; spots: string; tips: string; sheen: string; brow: string }
 
 export const PALETTES: Record<CompanionKind, Palette[]> = {
+  // Orrin is rendered, not drawn: one colourway (these only tint UI swatches)
+  owl: [
+    { id: 'natural', name: 'Natural', body: '#8A6240', spots: '#C9A27A', tips: '#E9E1D2', sheen: '#F2D9B0', brow: '#3A2A20' },
+  ],
   octopus: [
     { id: 'orange', name: 'Orange', body: '#EE7E34', spots: '#F7B247', tips: '#F8C9A2', sheen: '#FFD7B0', brow: '#3F5A6B' },
     { id: 'ink', name: 'Ink', body: '#5E5CE6', spots: '#8E8CFF', tips: '#CFCBFF', sheen: '#C3C0FF', brow: '#2E3A4A' },
@@ -71,7 +82,7 @@ export function isCompanionKind(k: unknown): k is CompanionKind {
 }
 
 export function resolveCompanion(kind: unknown, name: unknown, color?: unknown): Companion {
-  const k = isCompanionKind(kind) ? kind : 'octopus'
+  const k = isCompanionKind(kind) ? kind : 'owl'
   const n = typeof name === 'string' ? name.replace(/[^0-9A-Za-z\u00c0-\u024f .'-]/g, '').trim().slice(0, 24) : ''
   return { kind: k, name: n || COMPANIONS[k].defaultName, color: paletteFor(k, typeof color === 'string' ? color : null).id }
 }

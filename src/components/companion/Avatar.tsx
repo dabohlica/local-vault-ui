@@ -3,12 +3,14 @@
 import { useEffect, useRef, useState } from 'react'
 import type { CompanionKind } from '@/lib/companion'
 import { FlatAvatar } from './FlatAvatar'
+import { OwlAvatar } from './OwlAvatar'
 import type { Mood } from './stage'
 
 // The companion. `live` renders the interactive 3D character (follows the
 // cursor, reacts to hover and clicks, thinks, talks); otherwise a still render
 // of the same model, so long lists don't each hold a WebGL context. Without
-// WebGL it falls back to the flat drawing.
+// WebGL it falls back to the flat drawing. Orrin the owl is pre-rendered frames
+// on a 2D canvas instead, so he needs no WebGL.
 
 type Props = {
   kind: CompanionKind
@@ -37,6 +39,11 @@ export function CompanionAvatar(props: Props) {
   const [mode, setMode] = useState<'pending' | '3d' | 'flat'>('pending')
   useEffect(() => { setMode(hasWebgl() ? '3d' : 'flat') }, [])
   const { kind, size = 40, thinking, title, className = '' } = props
+  if (kind === 'owl') {
+    return mode === 'pending'
+      ? <span className={`companion relative inline-flex flex-shrink-0 ${className}`} style={{ width: size, height: size }} />
+      : <OwlAvatar {...props} />
+  }
   if (mode !== '3d') return <FlatAvatar kind={kind} size={size} thinking={thinking} title={title} className={className} />
   return props.live ? <Live {...props} /> : <Still {...props} />
 }

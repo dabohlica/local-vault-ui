@@ -5,8 +5,8 @@ import { COMPANIONS, resolveCompanion, type Companion, type CompanionDef } from 
 
 type Value = Companion & { def: CompanionDef; refresh: () => void }
 
-const DEFAULT = resolveCompanion('octopus', '')
-const Ctx = createContext<Value>({ ...DEFAULT, def: COMPANIONS.octopus, refresh: () => {} })
+const DEFAULT = resolveCompanion('owl', '')
+const Ctx = createContext<Value>({ ...DEFAULT, def: COMPANIONS.owl, refresh: () => {} })
 
 // Loads the chosen character once per page load; Settings calls refresh() (or
 // fires "companion:updated") after a change.

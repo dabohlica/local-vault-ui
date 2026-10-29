@@ -33,7 +33,7 @@ export function CompanionPicker() {
         <h2 className="text-sm font-semibold" style={{ color: 'var(--text)' }}>Your companion</h2>
         <p className="text-xs mt-0.5" style={{ color: 'var(--text-subtle)' }}>Who keeps your notes, answers your questions and argues with your ideas.</p>
       </div>
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         {COMPANION_KINDS.map(kind => {
           const def = COMPANIONS[kind]
           const active = kind === companion.kind
