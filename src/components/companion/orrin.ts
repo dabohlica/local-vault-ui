@@ -1,5 +1,5 @@
 // Orrin, the owl: pre-rendered frames (built in Blender, see ~/Desktop/CLAUDE/librarian-owl)
-// played on a 2D canvas. The head follows the cursor through a 9×5 grid of rendered head
+// played on a 2D canvas. The head follows the cursor through a 17×9 grid of rendered head
 // poses; clips (reading, petting, dozing, …) are frame sequences that start and end on the
 // neutral pose. Two frame sets live in public/orrin: `l` (368×400) and `s` (184×200).
 // All drawing is in the full render's coordinates (920×1000); the canvas transform scales.
@@ -211,8 +211,8 @@ export class Orrin {
   }
 
   // ------------------------------------------------------------------ gaze
-  // The head chases the cursor continuously while it moves (dissolving between rendered cells), then
-  // settles on the nearest cell once it stops, so at rest there is always one sharp frame. A damped
+  // The head chases the cursor continuously while it moves (showing the nearest rendered pose), then
+  // settles on the nearest cell once it stops. A damped
   // spring drives it: no waiting before a turn, no fixed per-cell steps, ease-in and ease-out for free.
   private stepGaze(tgt: [number, number], moving: boolean, dt: number) {
     for (let a = 0; a < 2; a++) this.aim[a] = moving ? tgt[a] : Math.round(tgt[a])
@@ -230,17 +230,7 @@ export class Orrin {
     const c = cell ?? [Math.round(this.p[0]), Math.round(this.p[1])]
     return Math.abs(this.p[0] - c[0]) < 0.03 && Math.abs(this.p[1] - c[1]) < 0.03 && Math.hypot(this.v[0], this.v[1]) < 0.3
   }
-  // the cells around p and how much of each to show: each cell stays solid for the outer fifth of
-  // the way and they dissolve across the middle, so a turn never shows two faces for long
-  private gazeMix(): Array<[number, number, number]> {
-    const ax = (x: number, n: number): [number, number] => {
-      const i = Math.min(Math.floor(x), n - 2), f = Math.min(Math.max((x - i - 0.2) / 0.6, 0), 1)
-      return [i, f * f * (3 - 2 * f)]
-    }
-    const [i, si] = ax(this.p[0], this.NI), [j, sj] = ax(this.p[1], this.NJ)
-    const mix: Array<[number, number, number]> = [[i, j, (1 - si) * (1 - sj)], [i + 1, j, si * (1 - sj)], [i, j + 1, (1 - si) * sj], [i + 1, j + 1, si * sj]]
-    return mix.filter(c => c[2] > 0.004).sort((a, b) => b[2] - a[2])
-  }
+  // the rendered head poses are 5° apart: show the nearest one, never a blend of two faces
 
   // ------------------------------------------------------------------ the loop
   // Advance by dt seconds and draw. ctx must already be scaled to the render's 920×1000 space.
@@ -301,25 +291,9 @@ export class Orrin {
       this.magic(ctx, now)
       return
     }
-    // mid-turn: a weighted dissolve of the (up to four) cells around the head's position
-    const mix = this.gazeMix()
-    if (mix.length > 1) {
-      let sum = 0
-      for (const [i, j, w] of mix) {
-        const im = this.imgs.get(`g_${i}_${j}`)
-        if (!im) continue
-        sum += w
-        ctx.globalAlpha = w / sum
-        ctx.drawImage(im, 0, 0, W, H)
-      }
-      ctx.globalAlpha = 1
-      this.shown = mix.map(([i, j, w]) => [`g_${i}_${j}`, w])
-      if (this.blink) { this.blink = null; this.nextBlink = now + 1200 + Math.random() * 2500 }
-      this.magic(ctx, now)
-      return
-    }
-    const [i, j] = mix[0]
-    if (this.paint(ctx, `g_${i}_${j}`) && this.blink && this.atRest()) {
+    const i = Math.round(this.p[0]), j = Math.round(this.p[1])
+    if (this.blink && !this.atRest()) { this.blink = null; this.nextBlink = now + 1200 + Math.random() * 2500 }
+    if (this.paint(ctx, `g_${i}_${j}`) && this.blink) {
       const b = this.blink, t = (now - b.t) / (b.slow ? 2.6 : 1)
       // half 55ms, shut 75ms, half 55ms (× seq)
       const k = t % 185, n = Math.floor(t / 185)

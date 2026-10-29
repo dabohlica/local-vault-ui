@@ -20,6 +20,7 @@ type Props = {
 }
 
 const FILL = 1.2   // the owl's height relative to the slot
+const NEUTRAL = 'g_8_4'   // head straight ahead in the 17×9 grid
 
 function frame(size: number) {
   const h = (FILL * size) / OWL_BOX.h, w = h * OWL_BOX.aspect
@@ -45,7 +46,7 @@ export function OwlAvatar({ size = 40, live, thinking, talking, title, className
 function StillOwl({ f, title, hidden }: { f: ReturnType<typeof frame>; title?: string; hidden?: boolean }) {
   return (
     // eslint-disable-next-line @next/next/no-img-element
-    <img src={`/orrin/${pickSet(f.h)}/g_4_2.webp`} alt={title ?? ''} aria-hidden={title ? undefined : true} draggable={false}
+    <img src={`/orrin/${pickSet(f.h)}/${NEUTRAL}.webp`} alt={title ?? ''} aria-hidden={title ? undefined : true} draggable={false}
       width={Math.round(f.w)} height={Math.round(f.h)}
       style={{ position: 'absolute', left: f.left, top: f.top, width: f.w, height: f.h, maxWidth: 'none', pointerEvents: 'none', visibility: hidden ? 'hidden' : undefined }} />
   )
